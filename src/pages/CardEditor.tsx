@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
 import { Category, Tag } from '../types/app'
-import { ArrowLeft, Save, Sparkles, X, Upload } from 'lucide-react'
+import { ArrowLeft, Save, Sparkles, X, Upload, Eye, Edit3 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
 import { generateSummary } from '../lib/openai'
 import { uploadFile, extractText } from '../lib/file-utils'
+import ReactMarkdown from 'react-markdown'
 
 interface CardForm {
   title: string
@@ -30,6 +31,7 @@ export default function CardEditor() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [tagInput, setTagInput] = useState('')
   const [generatingSummary, setGeneratingSummary] = useState(false)
+  const [isPreview, setIsPreview] = useState(false)
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CardForm>()
   const content = watch('content')
@@ -395,14 +397,49 @@ export default function CardEditor() {
                   disabled={uploading}
                 />
               </label>
-              <span className="text-xs text-gray-400 ml-2">支持 PDF, Word, 图片等自动识别</span>
+              
+              <button
+                type="button"
+                onClick={() => setIsPreview(!isPreview)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-blue-50 rounded-xl cursor-pointer transition-all duration-200 border border-gray-100 hover:border-blue-100 group"
+              >
+                {isPreview ? (
+                  <>
+                    <Edit3 className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                    <span className="text-sm font-medium text-gray-600 group-hover:text-blue-600 transition-colors">
+                      编辑模式
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                    <span className="text-sm font-medium text-gray-600 group-hover:text-blue-600 transition-colors">
+                      预览内容
+                    </span>
+                  </>
+                )}
+              </button>
             </div>
 
-            <textarea
-              {...register('content', { required: '请输入内容' })}
-              placeholder="开始输入内容..."
-              className="w-full h-[500px] resize-none border-none placeholder-gray-300 focus:ring-0 px-0 text-gray-700 text-lg leading-relaxed bg-transparent"
-            />
+            {isPreview ? (
+              <div className="w-full min-h-[500px] prose prose-blue max-w-none bg-white/50 rounded-xl p-4 border border-transparent">
+                <ReactMarkdown 
+                  components={{
+                    img: ({node, ...props}) => (
+                      <img {...props} className="rounded-lg shadow-sm max-h-96 object-contain mx-auto" alt={props.alt || ''} />
+                    )
+                  }}
+                >
+                  {content || '*暂无内容*'}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <textarea
+                {...register('content', { required: '请输入内容' })}
+                placeholder="开始输入内容... 支持 Markdown 语法"
+                className="w-full h-[500px] resize-none border-none placeholder-gray-300 focus:ring-0 px-0 text-gray-700 text-lg leading-relaxed bg-transparent font-mono"
+              />
+            )}
             {errors.content && (
               <p className="text-red-500 text-sm mt-2">{errors.content.message}</p>
             )}
