@@ -38,9 +38,14 @@
 }
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-gray-50 text-gray-900 transition-colors duration-300;
   background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+.dark body {
+  @apply bg-gray-900 text-gray-100;
+  background-image: radial-gradient(#374151 1px, transparent 1px);
 }
 
 /* Custom Scrollbar */
@@ -57,8 +62,16 @@ body {
   @apply bg-gray-300 rounded-full;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-gray-700;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
 }
 
 /* Glassmorphism Utilities */
@@ -66,6 +79,19 @@ body {
   @apply bg-white/80 backdrop-blur-md border border-white/20;
 }
 
+.dark .glass {
+  @apply bg-gray-900/80 border-gray-700/50;
+}
+
 .glass-card {
   @apply bg-white/70 backdrop-blur-sm border border-white/50 shadow-sm;
+}
+
+.dark .glass-card {
+  @apply bg-gray-800/70 border-gray-700/50 shadow-none;
+}
+
+/* Safe Area for Mobile */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
