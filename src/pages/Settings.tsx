@@ -7,10 +7,17 @@ import { supabase } from '../lib/supabase'
 export default function Settings() {
   const { user } = useAuth()
   const [apiKey, setApiKey] = useState('')
+  const [nickname, setNickname] = useState('')
   const [activeTab, setActiveTab] = useState('general')
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
   
+  // Password change state
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+
   // Theme state would typically be managed by a context or hook
   // For now we'll simulate it with local state
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -21,6 +28,74 @@ export default function Settings() {
     const storedKey = localStorage.getItem('deepseek_api_key')
     if (storedKey) setApiKey(storedKey)
   }, [])
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .single()
+          
+        if (error) throw error
+        if (data && data.name) {
+          setNickname(data.name)
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error)
+      }
+    }
+    
+    fetchProfile()
+  }, [user])
+
+  const handleSaveProfile = async () => {
+    if (!user) return
+    if (!nickname.trim()) return toast.error('昵称不能为空')
+    
+    try {
+      setSavingProfile(true)
+      const { error } = await supabase
+        .from('users')
+        .update({ name: nickname.trim() })
+        .eq('id', user.id)
+        
+      if (error) throw error
+      toast.success('个人信息已更新')
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      toast.error('更新失败')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const handleUpdatePassword = async () => {
+    if (!newPassword) return toast.error('请输入新密码')
+    if (newPassword.length < 6) return toast.error('密码长度至少为6位')
+    if (newPassword !== confirmPassword) return toast.error('两次输入的密码不一致')
+    
+    try {
+      setChangingPassword(true)
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+      
+      if (error) throw error
+      
+      toast.success('密码已更新')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error: any) {
+      console.error('Error updating password:', error)
+      toast.error(error.message || '密码更新失败')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
 
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
@@ -156,15 +231,78 @@ export default function Settings() {
               <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    昵称
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      placeholder="设置您的昵称"
+                      className="block w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 sm:text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                    />
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={savingProfile || !nickname.trim()}
+                      className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-w-[80px]"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      {savingProfile ? '保存中' : '保存'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     邮箱地址
                   </label>
                   <input
                     type="email"
                     value={user?.email || ''}
                     disabled
-                    className="block w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-500 dark:text-gray-400 sm:text-sm"
+                    className="block w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-500 dark:text-gray-400 sm:text-sm cursor-not-allowed"
                   />
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">邮箱地址暂不支持修改</p>
+                </div>
+                
+                <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-4">修改密码</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        新密码
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="请输入新密码"
+                        className="block w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 sm:text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        确认新密码
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="请再次输入新密码"
+                        className="block w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 sm:text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleUpdatePassword}
+                        disabled={changingPassword || !newPassword || !confirmPassword}
+                        className="inline-flex items-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Key className="w-4 h-4 mr-2" />
+                        {changingPassword ? '修改中...' : '修改密码'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

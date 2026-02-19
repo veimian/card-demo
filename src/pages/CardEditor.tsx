@@ -13,6 +13,7 @@ import FileProcessorWorker from '../workers/file-processor.worker?worker'
 import { Dialog, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
 import { useUpdateCardSharing } from '../hooks/useQueries'
+import CommentsSection from '../components/CommentsSection'
 
 interface CardForm {
   title: string
@@ -639,6 +640,12 @@ export default function CardEditor() {
               <p className="text-red-500 text-sm mt-2">{errors.content.message}</p>
             )}
           </div>
+
+          {!isNew && id && (
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/60 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-all duration-200">
+              <CommentsSection cardId={id} />
+            </div>
+          )}
         </div>
 
         {/* Sidebar / Metadata Area */}
