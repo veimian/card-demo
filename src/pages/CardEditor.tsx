@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
 import { Category, Tag } from '../types/app'
-import { ArrowLeft, Save, Sparkles, X, Upload, Eye, Edit3 } from 'lucide-react'
+import { ArrowLeft, Save, Sparkles, X, Upload, Eye, Edit3, Share2, Copy, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
 import { generateSummary } from '../lib/openai'
 import { uploadFile } from '../lib/file-utils'
 import ReactMarkdown from 'react-markdown'
 import FileProcessorWorker from '../workers/file-processor.worker?worker'
+import { Dialog, Transition } from '@headlessui/react'
+import { Fragment } from 'react'
+import { useUpdateCardSharing } from '../hooks/useQueries'
 
 interface CardForm {
   title: string
@@ -34,6 +37,14 @@ export default function CardEditor() {
   const [tagInput, setTagInput] = useState('')
   const [generatingSummary, setGeneratingSummary] = useState(false)
   const [isPreview, setIsPreview] = useState(false)
+  
+  // Sharing state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [isPublic, setIsPublic] = useState(false)
+  const [shareToken, setShareToken] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  
+  const updateSharingMutation = useUpdateCardSharing()
 
   const workerRef = useRef<Worker | null>(null)
 
@@ -150,6 +161,10 @@ export default function CardEditor() {
         setValue('content', card.content)
         setValue('summary', card.summary || '')
         setValue('category_id', card.category_id || '')
+        
+        // Set sharing state
+        setIsPublic(card.is_public || false)
+        setShareToken(card.share_token)
         
         if (card.card_tags) {
           const tags = card.card_tags.map((ct: any) => ct.tags).filter(Boolean)
@@ -369,13 +384,29 @@ export default function CardEditor() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+  const handleShareToggle = async () => {
+    if (!id) return
+    try {
+      const newIsPublic = !isPublic
+      await updateSharingMutation.mutateAsync({ id, is_public: newIsPublic })
+      setIsPublic(newIsPublic)
+      toast.success(newIsPublic ? '卡片已公开' : '卡片已设为私有')
+    } catch (error) {
+      console.error('Error updating sharing:', error)
+      toast.error('更新分享设置失败')
+    }
   }
+
+  const copyShareLink = () => {
+    if (!shareToken) return
+    const url = `${window.location.origin}/share/${shareToken}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    toast.success('链接已复制')
+  }
+
+  // ... (render logic)
 
   return (
     <div className="max-w-5xl mx-auto pb-20 md:pb-0">
@@ -391,17 +422,127 @@ export default function CardEditor() {
             {isNew ? '新建卡片' : '编辑卡片'}
           </h1>
         </div>
-        <button
-          onClick={handleSubmit(onSubmit)}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm md:text-base"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? '保存中...' : '保存'}
-        </button>
+        <div className="flex items-center gap-2 md:gap-3">
+          {!isNew && (
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-medium rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all text-sm md:text-base"
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="hidden sm:inline">分享</span>
+            </button>
+          )}
+          <button
+            onClick={handleSubmit(onSubmit)}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm md:text-base"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
       </div>
 
+      {/* Share Modal */}
+      <Transition appear show={isShareModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsShareModalOpen(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black/25 dark:bg-black/50 backdrop-blur-sm" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all border border-gray-100 dark:border-gray-700">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-lg font-bold leading-6 text-gray-900 dark:text-gray-100 flex items-center gap-2"
+                  >
+                    <Share2 className="w-5 h-5 text-blue-500" />
+                    分享卡片
+                  </Dialog.Title>
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      开启分享后，任何人都可以通过链接查看此卡片。
+                    </p>
+                    
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl mb-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">公开访问</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{isPublic ? '已开启' : '已关闭'}</span>
+                      </div>
+                      <button
+                        onClick={handleShareToggle}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          isPublic ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isPublic ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {isPublic && shareToken && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">分享链接</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${window.location.origin}/share/${shareToken}`}
+                            className="flex-1 block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <button
+                            onClick={copyShareLink}
+                            className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                            title="复制链接"
+                          >
+                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-lg border border-transparent bg-blue-100 dark:bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-900 dark:text-blue-100 hover:bg-blue-200 dark:hover:bg-blue-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors"
+                      onClick={() => setIsShareModalOpen(false)}
+                    >
+                      完成
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+
+
         {/* Main Editor Area */}
         <div className="lg:col-span-2 space-y-4 md:space-y-6 order-2 lg:order-1">
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 md:p-8 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-all duration-200">

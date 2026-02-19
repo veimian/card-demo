@@ -78,6 +78,8 @@ export type Database = {
           title: string
           content: string
           summary: string | null
+          is_public: boolean
+          share_token: string | null
           created_at: string
           updated_at: string
         }
@@ -88,6 +90,8 @@ export type Database = {
           title: string
           content: string
           summary?: string | null
+          is_public?: boolean
+          share_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -98,6 +102,8 @@ export type Database = {
           title?: string
           content?: string
           summary?: string | null
+          is_public?: boolean
+          share_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -161,6 +167,43 @@ export type Database = {
             foreignKeyName: "card_tags_tag_id_fkey"
             columns: ["tag_id"]
             referencedRelation: "tags"
+            referencedColumns: ["id"]
+          }
+        ]
+      },
+      comments: {
+        Row: {
+          id: string
+          card_id: string
+          user_id: string
+          content: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          card_id: string
+          user_id: string
+          content: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          user_id?: string
+          content?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_card_id_fkey"
+            columns: ["card_id"]
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
             referencedColumns: ["id"]
           }
         ]
