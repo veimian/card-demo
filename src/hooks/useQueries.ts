@@ -12,17 +12,23 @@ type CardInsert = Database['public']['Tables']['cards']['Insert']
 // --- Categories ---
 
 export const useCategories = () => {
+  const { user } = useAuth()
+  
   return useQuery({
-    queryKey: ['categories'],
+    queryKey: ['categories', user?.id],
     queryFn: async () => {
+      if (!user) return []
+      
       const { data, error } = await supabase
         .from('categories')
         .select('*')
+        .eq('user_id', user.id) // Filter by current user
         .order('order_index', { ascending: true })
       
       if (error) throw error
       return data as Category[]
-    }
+    },
+    enabled: !!user
   })
 }
 
