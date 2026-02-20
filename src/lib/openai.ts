@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { supabase } from './supabase'
 
 export interface AIAnalysisResult {
   title: string;
@@ -8,8 +9,24 @@ export interface AIAnalysisResult {
 }
 
 export async function generateSummary(content: string): Promise<AIAnalysisResult> {
-  const apiKey = localStorage.getItem('deepseek_api_key') || import.meta.env.VITE_DEEPSEEK_API_KEY
+  let apiKey = localStorage.getItem('deepseek_api_key') || import.meta.env.VITE_DEEPSEEK_API_KEY
   
+  if (!apiKey) {
+    try {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'deepseek_default_key')
+        .single()
+      
+      if (data?.value) {
+        apiKey = data.value
+      }
+    } catch (error) {
+      console.error('Failed to fetch default API key:', error)
+    }
+  }
+
   if (!apiKey) {
     throw new Error('请先在设置中配置 DeepSeek API Key')
   }

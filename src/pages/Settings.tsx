@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Save, Key, User, Shield, Smartphone, Palette, Moon, Sun, Download, Upload, FileText } from 'lucide-react'
+import { Save, Key, User, Smartphone, Palette, Moon, Sun, Download, Upload, FileText, Wrench } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 
 export default function Settings() {
   const { user } = useAuth()
   const [apiKey, setApiKey] = useState('')
+  const [defaultApiKey, setDefaultApiKey] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [nickname, setNickname] = useState('')
   const [activeTab, setActiveTab] = useState('general')
   const [exporting, setExporting] = useState(false)
@@ -36,13 +38,22 @@ export default function Settings() {
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('name')
+          .select('name, role')
           .eq('id', user.id)
           .single()
           
         if (error) throw error
-        if (data && data.name) {
-          setNickname(data.name)
+        if (data) {
+          if (data.name) setNickname(data.name)
+          if (data.role === 'admin') {
+            setIsAdmin(true)
+            const { data: settings } = await supabase
+              .from('system_settings')
+              .select('value')
+              .eq('key', 'deepseek_default_key')
+              .single()
+            if (settings?.value) setDefaultApiKey(settings.value)
+          }
         }
       } catch (error) {
         console.error('Error fetching profile:', error)
@@ -51,6 +62,128 @@ export default function Settings() {
     
     fetchProfile()
   }, [user])
+
+  const handleSaveDefaultKey = async () => {
+    try {
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({ 
+          key: 'deepseek_default_key', 
+          value: defaultApiKey.trim() 
+        })
+      
+      if (error) throw error
+      toast.success('默认 API Key 已更新')
+    } catch (error) {
+      console.error('Error saving default key:', error)
+      toast.error('保存失败')
+    }
+  }
+
+  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setImporting(true)
+      const toastId = toast.loading('正在导入数据...')
+      
+      const text = await file.text()
+      const data = JSON.parse(text)
+      
+      if (!Array.isArray(data)) throw new Error('无效的数据格式')
+      
+      let successCount = 0
+      
+      for (const item of data) {
+        let categoryId = item.category_id
+        
+        // Handle Category
+        if (item.categories && item.categories.name) {
+           const { data: existingCat } = await supabase
+             .from('categories')
+             .select('id')
+             .eq('user_id', user.id)
+             .eq('name', item.categories.name)
+             .single()
+             
+           if (existingCat) {
+             categoryId = existingCat.id
+           } else {
+             const { data: newCat } = await supabase
+               .from('categories')
+               .insert({
+                 user_id: user.id,
+                 name: item.categories.name,
+                 color: item.categories.color
+               })
+               .select()
+               .single()
+             if (newCat) categoryId = newCat.id
+           }
+        }
+
+        // Insert Card
+        const { data: newCard, error: cardError } = await supabase
+          .from('cards')
+          .insert({
+            user_id: user.id,
+            category_id: categoryId,
+            title: item.title,
+            content: item.content,
+            summary: item.summary,
+            created_at: item.created_at
+          })
+          .select()
+          .single()
+          
+        if (cardError) continue
+        
+        // Handle Tags
+        if (newCard && item.card_tags && item.card_tags.length > 0) {
+           for (const ct of item.card_tags) {
+             if (!ct.tags || !ct.tags.name) continue
+             
+             let tagId = ct.tags.id
+             const { data: existingTag } = await supabase
+               .from('tags')
+               .select('id')
+               .eq('name', ct.tags.name)
+               .single()
+               
+             if (existingTag) {
+               tagId = existingTag.id
+             } else {
+               const { data: newTag } = await supabase
+                 .from('tags')
+                 .insert({ name: ct.tags.name })
+                 .select()
+                 .single()
+               if (newTag) tagId = newTag.id
+             }
+             
+             if (tagId) {
+               await supabase
+                 .from('card_tags')
+                 .insert({
+                   card_id: newCard.id,
+                   tag_id: tagId
+                 })
+             }
+           }
+        }
+        successCount++
+      }
+      
+      toast.success(`成功导入 ${successCount} 条数据`, { id: toastId })
+    } catch (error) {
+      console.error('Import failed:', error)
+      toast.error('导入失败，请检查文件格式')
+    } finally {
+      setImporting(false)
+      event.target.value = ''
+    }
+  }
 
   const handleSaveProfile = async () => {
     if (!user) return
@@ -190,8 +323,11 @@ export default function Settings() {
     { id: 'appearance', name: '外观主题', icon: Palette },
     { id: 'data', name: '数据管理', icon: FileText },
     { id: 'ai', name: 'AI 设置', icon: Key },
-    { id: 'security', name: '安全隐私', icon: Shield },
   ]
+  
+  if (isAdmin) {
+    tabs.push({ id: 'admin', name: '系统管理', icon: Wrench })
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
@@ -206,7 +342,7 @@ export default function Settings() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 md:w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                className={`flex-shrink-0 md:w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors duration-75 ${
                   activeTab === tab.id
                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-100 dark:border-gray-700'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200'
@@ -371,14 +507,14 @@ export default function Settings() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">导入、导出或备份您的数据</p>
               </div>
               <div className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <button
                     onClick={() => handleExportData('json')}
                     disabled={exporting}
                     className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 dark:border-gray-700 border-dashed rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
                   >
                     <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-3 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
-                      <Download className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                      <Upload className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 className="font-medium text-gray-900 dark:text-gray-100">导出 JSON 备份</h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">包含所有元数据的完整备份</p>
@@ -395,6 +531,15 @@ export default function Settings() {
                     <h3 className="font-medium text-gray-900 dark:text-gray-100">导出 Markdown</h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">适合迁移到其他笔记软件</p>
                   </button>
+
+                  <label className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 dark:border-gray-700 border-dashed rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group cursor-pointer">
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full mb-3 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                      <Download className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100">导入数据</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">支持 JSON 格式备份恢复</p>
+                    <input type="file" className="hidden" accept=".json" onChange={handleImportData} disabled={importing} />
+                  </label>
                 </div>
               </div>
             </div>
@@ -410,7 +555,7 @@ export default function Settings() {
               <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    DeepSeek API Key
+                    个人 DeepSeek API Key (可选)
                   </label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -422,7 +567,7 @@ export default function Settings() {
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
                         className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 sm:text-sm transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-                        placeholder="sk-..."
+                        placeholder={defaultApiKey ? "系统已配置默认 Key，您可以设置自己的以覆盖" : "sk-..."}
                       />
                     </div>
                     <button
@@ -434,7 +579,6 @@ export default function Settings() {
                     </button>
                   </div>
                   <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                    <Shield className="w-3 h-3" />
                     您的 API Key 仅存储在本地浏览器中，不会发送到我们的服务器。
                   </p>
                 </div>
@@ -442,23 +586,42 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Security Settings */}
-          {activeTab === 'security' && (
+          {/* Admin Settings */}
+          {activeTab === 'admin' && isAdmin && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">安全与隐私</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">管理您的账户安全设置</p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">系统管理</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">全局系统设置 (仅管理员可见)</p>
               </div>
-              <div className="p-6">
-                <div className="flex items-center justify-between py-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">多设备同步</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">在所有登录设备间同步数据</p>
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    默认 DeepSeek API Key
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Key className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                      </div>
+                      <input
+                        type="password"
+                        value={defaultApiKey}
+                        onChange={(e) => setDefaultApiKey(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 dark:focus:border-purple-400 sm:text-sm transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                        placeholder="设置全局默认 Key"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSaveDefaultKey}
+                      className="inline-flex items-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all hover:shadow-lg hover:shadow-purple-500/30"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      保存
+                    </button>
                   </div>
-                  <div className="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
-                    <input type="checkbox" name="toggle" id="toggle" className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white dark:bg-gray-600 border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-500 checked:right-0 checked:border-blue-600 dark:checked:border-blue-500"/>
-                    <label htmlFor="toggle" className="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 dark:bg-gray-600 cursor-pointer"></label>
-                  </div>
+                  <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    此 Key 将作为所有用户的默认 Key。用户可以在上方设置自己的 Key 来覆盖此默认值。
+                  </p>
                 </div>
               </div>
             </div>

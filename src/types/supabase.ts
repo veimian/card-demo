@@ -14,6 +14,7 @@ export type Database = {
           id: string
           email: string | null
           name: string | null
+          role: string | null
           plan: 'free' | 'premium' | null
           created_at: string
           updated_at: string
@@ -22,6 +23,7 @@ export type Database = {
           id: string
           email?: string | null
           name?: string | null
+          role?: string | null
           plan?: 'free' | 'premium' | null
           created_at?: string
           updated_at?: string
@@ -30,7 +32,29 @@ export type Database = {
           id?: string
           email?: string | null
           name?: string | null
+          role?: string | null
           plan?: 'free' | 'premium' | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          key: string
+          value: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: string | null
           created_at?: string
           updated_at?: string
         }
