@@ -20,17 +20,18 @@ export default function CategoryAnalysis() {
       if (!user) return [];
       
       const { data, error } = await supabase
-        .rpc('get_category_statistics', { query_user_id: user.id });
+        .rpc('get_category_statistics', { user_id: user.id });
         
       if (error) throw error;
+      if (!data) return [];
       
-      return data?.map((item: any) => ({
+      return data.map((item) => ({
         name: item.name,
         count: item.count,
         dueCount: item.due_count,
         averageRetention: item.average_retention,
         color: item.color
-      })) || [];
+      }));
     },
     enabled: !!user
   });

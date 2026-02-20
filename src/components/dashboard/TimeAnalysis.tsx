@@ -19,14 +19,13 @@ export default function TimeAnalysis() {
       
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       
-      // @ts-ignore - Supabase types might not be updated yet
       const { data, error } = await supabase
         .rpc('get_hourly_review_patterns', { 
-          query_user_id: user.id,
-          user_timezone: userTimezone
+          user_id: user.id
         });
         
       if (error) throw error;
+      if (!data) return [];
       
       // Initialize all 24 hours with 0
       const hours = Array.from({ length: 24 }, (_, i) => ({
@@ -36,7 +35,7 @@ export default function TimeAnalysis() {
       }));
       
       // Merge with data
-      data?.forEach((item: any) => {
+      data.forEach((item) => {
         if (hours[item.hour]) {
           hours[item.hour] = item;
         }

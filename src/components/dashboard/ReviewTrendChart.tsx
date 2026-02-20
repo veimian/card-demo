@@ -23,18 +23,19 @@ export default function ReviewTrendChart() {
       
       const { data, error } = await supabase
         .rpc('get_daily_review_stats', {
-          query_user_id: user.id,
+          user_id: user.id,
           start_date: thirtyDaysAgo.toISOString()
         });
         
       if (error) throw error;
+      if (!data) return [];
       
-      return data?.map((item: any) => ({
+      return data.map((item) => ({
         date: item.date,
         reviews: item.reviews,
         newCards: item.new_cards,
         retentionRate: item.retention_rate
-      })) || [];
+      }));
     },
     enabled: !!user
   });

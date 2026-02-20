@@ -329,7 +329,40 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_category_statistics: {
+        Args: {
+          query_user_id: string
+        }
+        Returns: {
+          name: string
+          count: number
+          due_count: number
+          average_retention: number
+          color: string
+        }[]
+      }
+      get_daily_review_stats: {
+        Args: {
+          user_id: string
+          start_date: string
+        }
+        Returns: {
+          date: string
+          reviews: number
+          new_cards: number
+          retention_rate: number
+        }[]
+      }
+      get_hourly_review_patterns: {
+        Args: {
+          user_id: string
+        }
+        Returns: {
+          hour: number
+          count: number
+          avg_rating: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
