@@ -1,53 +1,17 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { Session, User } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../store/authStore';
 
-interface AuthContextType {
-  session: Session | null
-  user: User | null
-  loading: boolean
-  signOut: () => Promise<void>
+// Re-export useAuth from store for backward compatibility
+export const useAuth = () => {
+  const session = useAuthStore((state) => state.session);
+  const user = useAuthStore((state) => state.user);
+  const loading = useAuthStore((state) => state.loading);
+  const signOut = useAuthStore((state) => state.signOut);
+
+  return { session, user, loading, signOut };
+};
+
+// Deprecated Provider (kept if some imports still use it, though we removed it from main.tsx)
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // This is now a no-op wrapper since state is in Zustand
+  return <>{children}</>;
 }
-
-const AuthContext = createContext<AuthContextType>({
-  session: null,
-  user: null,
-  loading: true,
-  signOut: async () => {},
-})
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const signOut = async () => {
-    await supabase.auth.signOut()
-  }
-
-  return (
-    <AuthContext.Provider value={{ session, user, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
-
-export const useAuth = () => useContext(AuthContext)

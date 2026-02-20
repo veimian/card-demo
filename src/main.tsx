@@ -1,11 +1,11 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import './index.css'
-import { AuthProvider } from './contexts/AuthContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { useAuthStore } from './store/authStore'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,14 +16,25 @@ const queryClient = new QueryClient({
   },
 })
 
+// Initialize Auth
+function AuthInitializer({ children }: { children: React.ReactNode }) {
+  const initializeAuth = useAuthStore((state) => state.initializeAuth)
+  
+  useEffect(() => {
+    initializeAuth()
+  }, [initializeAuth])
+  
+  return <>{children}</>
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+        <AuthInitializer>
           <Toaster position="top-right" />
           <App />
-        </AuthProvider>
+        </AuthInitializer>
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,

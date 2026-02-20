@@ -3,10 +3,13 @@ import toast from 'react-hot-toast'
 import { Save, Key, User, Smartphone, Palette, Moon, Sun, Download, Upload, FileText, Wrench } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useSettingsStore } from '../store/settingsStore'
 
 export default function Settings() {
   const { user } = useAuth()
-  const [apiKey, setApiKey] = useState('')
+  const { theme, setTheme: setStoreTheme, apiKey: storeApiKey, setApiKey: setStoreApiKey } = useSettingsStore()
+  
+  const [apiKey, setApiKey] = useState(storeApiKey)
   const [defaultApiKey, setDefaultApiKey] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [nickname, setNickname] = useState('')
@@ -20,16 +23,10 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
 
-  // Theme state would typically be managed by a context or hook
-  // For now we'll simulate it with local state
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
-  })
-
+  // Sync local apiKey state with store
   useEffect(() => {
-    const storedKey = localStorage.getItem('deepseek_api_key')
-    if (storedKey) setApiKey(storedKey)
-  }, [])
+    setApiKey(storeApiKey)
+  }, [storeApiKey])
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -232,23 +229,17 @@ export default function Settings() {
 
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
-      localStorage.removeItem('deepseek_api_key')
+      setStoreApiKey('')
       toast.success('API Key 已清除')
       return
     }
     
-    localStorage.setItem('deepseek_api_key', apiKey.trim())
+    setStoreApiKey(apiKey.trim())
     toast.success('API Key 已保存')
   }
 
   const toggleTheme = (newTheme: 'light' | 'dark') => {
-    setTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    setStoreTheme(newTheme)
     toast.success(`已切换至${newTheme === 'light' ? '日间' : '夜间'}模式`)
   }
 
