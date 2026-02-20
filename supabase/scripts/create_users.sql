@@ -2,6 +2,9 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. 清理旧用户 (如果存在)
+-- 注意：这里使用 CASCADE 可能会比较危险，但如果只是测试数据没问题。
+-- 安全起见，先删除 identities，再删除 users
+DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com'));
 DELETE FROM auth.users WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com');
 
 -- 2. 创建用户: 1405519648@qq.com
@@ -83,7 +86,7 @@ INSERT INTO auth.users (
 );
 
 -- 4. 插入 auth.identities
--- 修正：显式插入 provider_id，并将其设为 user_id (对于 email 登录)
+-- 修正：添加 provider_id 并进行显式类型转换 (UUID -> TEXT)
 INSERT INTO auth.identities (
     id,
     provider_id,
@@ -96,8 +99,8 @@ INSERT INTO auth.identities (
 )
 SELECT
     gen_random_uuid(),
-    id, -- provider_id 使用 user_id
-    id, -- user_id
+    id::text, -- 显式转换为 text
+    id,
     format('{"sub": "%s", "email": "%s"}', id, email)::jsonb,
     'email',
     now(),
