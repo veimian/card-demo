@@ -38,7 +38,7 @@ export class BasicQuestionGenerator implements QuestionGenerator {
     const content = card.content || '';
     
     switch (type) {
-      case 'fill-in-blank':
+      case 'fill-in-blank': {
         // Simple cloze: remove random words
         const obfuscated = ContentObfuscator.obfuscateContent(content, 0.3); // 30% hidden
         return {
@@ -48,8 +48,9 @@ export class BasicQuestionGenerator implements QuestionGenerator {
           cardId: card.id,
           explanation: card.content
         };
+      }
         
-      case 'multiple-choice':
+      case 'multiple-choice': {
         // Generate options (mock)
         const distractors = ContentObfuscator.generateDistractors(content, 3);
         const options = [content, ...distractors].sort(() => Math.random() - 0.5);
@@ -60,6 +61,7 @@ export class BasicQuestionGenerator implements QuestionGenerator {
           correctAnswer: content,
           cardId: card.id
         };
+      }
         
       case 'flashcard':
       default:

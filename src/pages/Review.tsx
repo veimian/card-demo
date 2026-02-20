@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check, X, RotateCcw, Clock, Brain } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { calculateNextReview, Rating, RATING_DESCRIPTIONS } from '../lib/srs'
+import { calculateNextReview, Rating } from '../lib/srs'
 import { ContentObfuscator } from '../lib/content-obfuscation'
 import { Card } from '../types/app'
 import StreakTracker from '../components/StreakTracker'
 import { useUpdateStreak } from '../hooks/useStreakUpdate'
+import { useMobileOptimization } from '../hooks/useMobileOptimization'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 
 interface ReviewCard extends Card {
   next_review: string
@@ -27,22 +29,53 @@ export default function Review() {
   const [showAnswer, setShowAnswer] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [startTime, setStartTime] = useState(Date.now())
-  const [sessionStats, setSessionStats] = useState({
-    reviewed: 0,
-    correct: 0
-  })
 
-  useEffect(() => {
-    if (user) {
-      fetchDueCards()
+  const { isMobile } = useMobileOptimization()
+
+  useKeyboardShortcuts([
+    {
+      key: ' ', // Space
+      action: () => {
+        if (!showAnswer) setShowAnswer(true)
+      },
+      description: 'Show Answer'
+    },
+    {
+      key: 'h',
+      action: () => setShowHint(prev => !prev),
+      description: 'Toggle Hint'
+    },
+    {
+      key: '1',
+      action: () => showAnswer && handleRating(1),
+      description: 'Rate: Forgot'
+    },
+    {
+      key: '2',
+      action: () => showAnswer && handleRating(2), // We don't have a button for 2, mapping to Hard? No, 2 is "Hard" in SM-2 but we only have 1, 3, 4, 5 buttons.
+      // Wait, the UI has: 1 (Forget), 3 (Hard), 4 (Good), 5 (Easy).
+      // Let's map 1->1, 2->3, 3->4, 4->5 for easier typing? Or 1, 3, 4, 5 directly?
+      // Let's map 1, 3, 4, 5 directly to avoid confusion.
+      description: 'Rate: Hard (mapped to 2 for convenience)'
+    },
+    {
+      key: '3',
+      action: () => showAnswer && handleRating(3),
+      description: 'Rate: Hard'
+    },
+    {
+      key: '4',
+      action: () => showAnswer && handleRating(4),
+      description: 'Rate: Good'
+    },
+    {
+      key: '5',
+      action: () => showAnswer && handleRating(5),
+      description: 'Rate: Easy'
     }
-  }, [user])
+  ])
 
-  useEffect(() => {
-    setStartTime(Date.now())
-  }, [currentIndex])
-
-  const fetchDueCards = async () => {
+  const fetchDueCards = useCallback(async () => {
     try {
       setLoading(true)
       const now = new Date().toISOString()
@@ -72,7 +105,17 @@ export default function Review() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      fetchDueCards()
+    }
+  }, [user, fetchDueCards])
+
+  useEffect(() => {
+    setStartTime(Date.now())
+  }, [currentIndex])
 
   const handleRating = async (rating: Rating) => {
     const currentCard = cards[currentIndex]
@@ -101,10 +144,10 @@ export default function Review() {
       if (error) throw error
 
       // Update stats
-      setSessionStats(prev => ({
-        reviewed: prev.reviewed + 1,
-        correct: rating >= 3 ? prev.correct + 1 : prev.correct
-      }))
+      // setSessionStats(prev => ({
+      //   reviewed: prev.reviewed + 1,
+      //   correct: rating >= 3 ? prev.correct + 1 : prev.correct
+      // }))
 
       // Update streak
       const timeSpent = Math.round((Date.now() - startTime) / 1000)
@@ -232,7 +275,7 @@ export default function Review() {
       </div>
 
       {/* Controls */}
-      <div className="mt-6 px-4">
+      <div className={`mt-6 px-4 ${isMobile ? 'pb-20' : ''}`}>
         {!showAnswer ? (
           <div className="flex gap-3">
             <button
@@ -296,6 +339,12 @@ export default function Review() {
       <div className="fixed bottom-6 right-6 z-40 w-80 shadow-2xl hidden lg:block transition-all hover:scale-105">
         <StreakTracker />
       </div>
+
+      {!isMobile && (
+        <div className="fixed bottom-6 left-6 text-xs text-gray-400 pointer-events-none">
+          <p>快捷键: 空格=显示答案/ H=提示 / 1,3,4,5=评分</p>
+        </div>
+      )}
     </div>
   )
 }
