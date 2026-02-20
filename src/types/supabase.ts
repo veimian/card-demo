@@ -60,6 +60,86 @@ export type Database = {
         }
         Relationships: []
       }
+      user_stats: {
+        Row: {
+          user_id: string
+          current_streak: number
+          longest_streak: number
+          total_reviews: number
+          last_review_date: string | null
+          daily_goal: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          current_streak?: number
+          longest_streak?: number
+          total_reviews?: number
+          last_review_date?: string | null
+          daily_goal?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          current_streak?: number
+          longest_streak?: number
+          total_reviews?: number
+          last_review_date?: string | null
+          daily_goal?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stats_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      review_logs: {
+        Row: {
+          id: string
+          user_id: string
+          card_id: string | null
+          rating: number | null
+          review_date: string
+          time_spent: number | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          card_id?: string | null
+          rating?: number | null
+          review_date?: string
+          time_spent?: number | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          card_id?: string | null
+          rating?: number | null
+          review_date?: string
+          time_spent?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_logs_card_id_fkey"
+            columns: ["card_id"]
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_logs_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       categories: {
         Row: {
           id: string

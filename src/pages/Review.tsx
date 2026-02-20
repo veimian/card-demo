@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { calculateNextReview, Rating, RATING_DESCRIPTIONS } from '../lib/srs'
 import { Card } from '../types/app'
+import StreakTracker from '../components/StreakTracker'
+import { useUpdateStreak } from '../hooks/useStreakUpdate'
 
 interface ReviewCard extends Card {
   next_review: string
@@ -17,10 +19,12 @@ interface ReviewCard extends Card {
 export default function Review() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const updateStreakMutation = useUpdateStreak()
   const [loading, setLoading] = useState(true)
   const [cards, setCards] = useState<ReviewCard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
+  const [startTime, setStartTime] = useState(Date.now())
   const [sessionStats, setSessionStats] = useState({
     reviewed: 0,
     correct: 0
@@ -31,6 +35,10 @@ export default function Review() {
       fetchDueCards()
     }
   }, [user])
+
+  useEffect(() => {
+    setStartTime(Date.now())
+  }, [currentIndex])
 
   const fetchDueCards = async () => {
     try {
@@ -95,6 +103,14 @@ export default function Review() {
         reviewed: prev.reviewed + 1,
         correct: rating >= 3 ? prev.correct + 1 : prev.correct
       }))
+
+      // Update streak
+      const timeSpent = Math.round((Date.now() - startTime) / 1000)
+      updateStreakMutation.mutate({
+        cardId: currentCard.id,
+        rating,
+        timeSpent
+      })
 
       // Move to next card
       if (currentIndex < cards.length - 1) {
@@ -248,6 +264,10 @@ export default function Review() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="fixed bottom-6 right-6 z-40 w-80 shadow-2xl hidden lg:block transition-all hover:scale-105">
+        <StreakTracker />
       </div>
     </div>
   )
