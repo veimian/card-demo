@@ -1,12 +1,10 @@
--- 确保 pgcrypto 扩展已启用 (用于生成密码 Hash)
+-- 确保 pgcrypto 扩展已启用
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. 清理旧用户 (如果存在)
--- 注意: 这将级联删除 public schema 中的所有相关数据 (cards, categories, etc.)
 DELETE FROM auth.users WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com');
 
 -- 2. 创建用户: 1405519648@qq.com
--- 默认密码: 12345678
 INSERT INTO auth.users (
     instance_id,
     id,
@@ -46,7 +44,6 @@ INSERT INTO auth.users (
 );
 
 -- 3. 创建用户: sleepyaxin@163.com
--- 默认密码: 12345678
 INSERT INTO auth.users (
     instance_id,
     id,
@@ -85,9 +82,11 @@ INSERT INTO auth.users (
     ''
 );
 
--- 4. 插入 auth.identities (必须，否则无法通过 email 登录)
+-- 4. 插入 auth.identities
+-- 修正：显式插入 provider_id，并将其设为 user_id (对于 email 登录)
 INSERT INTO auth.identities (
     id,
+    provider_id,
     user_id,
     identity_data,
     provider,
@@ -97,7 +96,8 @@ INSERT INTO auth.identities (
 )
 SELECT
     gen_random_uuid(),
-    id,
+    id, -- provider_id 使用 user_id
+    id, -- user_id
     format('{"sub": "%s", "email": "%s"}', id, email)::jsonb,
     'email',
     now(),
@@ -106,5 +106,5 @@ SELECT
 FROM auth.users
 WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com');
 
--- 5. 验证是否创建成功
-SELECT id, email, created_at FROM auth.users WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com');
+-- 5. 验证
+SELECT id, email FROM auth.users WHERE email IN ('1405519648@qq.com', 'sleepyaxin@163.com');
