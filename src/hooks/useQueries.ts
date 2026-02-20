@@ -84,17 +84,36 @@ export const useDeleteCategory = () => {
 // --- Tags ---
 
 export const useTags = () => {
+  const { user } = useAuth()
+  
   return useQuery({
-    queryKey: ['tags'],
+    queryKey: ['tags', user?.id],
     queryFn: async () => {
+      if (!user) return []
+      
+      // Fetch tags that are associated with the user's cards
       const { data, error } = await supabase
         .from('tags')
-        .select('*')
+        .select(`
+          *,
+          card_tags!inner(
+            card_id,
+            cards!inner(
+              user_id
+            )
+          )
+        `)
+        .eq('card_tags.cards.user_id', user.id)
         .order('name', { ascending: true })
       
       if (error) throw error
-      return data as Tag[]
-    }
+      
+      // Deduplicate tags (one tag might be used in multiple cards)
+      const uniqueTags = Array.from(new Map(data.map(tag => [tag.id, tag])).values())
+      
+      return uniqueTags as Tag[]
+    },
+    enabled: !!user
   })
 }
 
