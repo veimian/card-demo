@@ -331,7 +331,7 @@ export type Database = {
     Functions: {
       get_category_statistics: {
         Args: {
-          query_user_id: string
+          user_id: string
         }
         Returns: {
           name: string
