@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { calculateNextReview, Rating, RATING_DESCRIPTIONS } from '../lib/srs'
+import { ContentObfuscator } from '../lib/content-obfuscation'
 import { Card } from '../types/app'
 import StreakTracker from '../components/StreakTracker'
 import { useUpdateStreak } from '../hooks/useStreakUpdate'
@@ -24,6 +25,7 @@ export default function Review() {
   const [cards, setCards] = useState<ReviewCard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
+  const [showHint, setShowHint] = useState(false)
   const [startTime, setStartTime] = useState(Date.now())
   const [sessionStats, setSessionStats] = useState({
     reviewed: 0,
@@ -116,6 +118,7 @@ export default function Review() {
       if (currentIndex < cards.length - 1) {
         setCurrentIndex(prev => prev + 1)
         setShowAnswer(false)
+        setShowHint(false)
       } else {
         // Session complete
         toast.success(`复习完成！共复习 ${cards.length} 张卡片`)
@@ -208,6 +211,18 @@ export default function Review() {
                 <div className="whitespace-pre-wrap">{currentCard.content}</div>
               </div>
             </div>
+          ) : showHint ? (
+            <div className="p-8 flex-1 bg-gray-50 dark:bg-gray-800/50 flex flex-col animate-in fade-in duration-300 border-t-4 border-yellow-400/30">
+              <div className="flex items-center gap-2 mb-4 text-yellow-600 dark:text-yellow-500">
+                <Brain className="w-5 h-5" />
+                <span className="font-medium text-sm">提示模式 (部分遮挡)</span>
+              </div>
+              <div className="prose dark:prose-invert max-w-none opacity-80">
+                <div className="whitespace-pre-wrap tracking-wide">
+                  {ContentObfuscator.obfuscateContent(currentCard.content || '', 0.6)}
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="absolute inset-0 top-[50%] flex items-center justify-center pointer-events-none">
               {/* Optional: Add a subtle hint or icon here */}
@@ -219,12 +234,24 @@ export default function Review() {
       {/* Controls */}
       <div className="mt-6 px-4">
         {!showAnswer ? (
-          <button
-            onClick={() => setShowAnswer(true)}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-semibold text-lg shadow-lg shadow-blue-500/20 transition-all transform active:scale-[0.98]"
-          >
-            显示答案
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowHint(!showHint)}
+              className={`px-6 py-4 rounded-2xl font-semibold text-lg transition-all transform active:scale-[0.98] border-2 ${
+                showHint 
+                  ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800' 
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+              }`}
+            >
+              {showHint ? '隐藏提示' : '提示'}
+            </button>
+            <button
+              onClick={() => setShowAnswer(true)}
+              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-semibold text-lg shadow-lg shadow-blue-500/20 transition-all transform active:scale-[0.98]"
+            >
+              显示答案
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-4 gap-3">
             <button

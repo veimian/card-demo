@@ -1,19 +1,4 @@
-export type Rating = 0 | 1 | 2 | 3 | 4 | 5;
-
-// SuperMemo-2 Algorithm
-export interface CardSRS {
-  next_review: string; // ISO Date string
-  interval: number;    // Days
-  ease_factor: number;
-  review_count: number;
-}
-
-export const initialSRSState: CardSRS = {
-  next_review: new Date().toISOString(),
-  interval: 0,
-  ease_factor: 2.5,
-  review_count: 0,
-};
+import { Rating } from './srs';
 
 export interface EnhancedSRSConfig {
   minInterval: number;        // Minimum interval in days
@@ -31,15 +16,17 @@ export const DEFAULT_SRS_CONFIG: EnhancedSRSConfig = {
   fuzzing: true,
 };
 
+export interface CardSRS {
+  next_review: string; // ISO Date string
+  interval: number;    // Days
+  ease_factor: number;
+  review_count: number;
+}
+
 /**
  * Enhanced SRS Algorithm based on SM-2 with improvements
- * @param currentInterval Current interval in days
- * @param currentEaseFactor Current ease factor (minimum 1.3)
- * @param rating Quality of response (0-5)
- * @param reviewCount Number of times reviewed so far
- * @param config Optional configuration for the algorithm
  */
-export function calculateNextReview(
+export function calculateNextReviewEnhanced(
   currentInterval: number,
   currentEaseFactor: number,
   rating: Rating,
@@ -48,11 +35,11 @@ export function calculateNextReview(
 ): CardSRS {
   let nextInterval: number;
   let nextEaseFactor: number;
-
+  
   // Quality response (0-5)
   // 3-5: Correct
   // 0-2: Incorrect
-
+  
   if (rating >= 3) {
     if (reviewCount === 0) {
       nextInterval = 1;
@@ -87,6 +74,9 @@ export function calculateNextReview(
 
   const nextReviewDate = new Date();
   nextReviewDate.setDate(nextReviewDate.getDate() + nextInterval);
+  
+  // Set time to specific hour? Or just keep current time + days?
+  // Usually setting to start of day or specific review time is better, but let's keep it simple: exact time.
 
   return {
     next_review: nextReviewDate.toISOString(),
@@ -95,12 +85,3 @@ export function calculateNextReview(
     review_count: rating >= 3 ? reviewCount + 1 : 0, // Reset review count on failure to restart "learning phase" logic (1 -> 6 -> ...)
   };
 }
-
-export const RATING_DESCRIPTIONS = {
-  0: '完全忘记',
-  1: '错误',
-  2: '困难',
-  3: '一般',
-  4: '良好',
-  5: '简单',
-};
