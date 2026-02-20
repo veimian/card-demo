@@ -20,7 +20,7 @@ export default function CategoryAnalysis() {
       if (!user) return [];
       
       const { data, error } = await supabase
-        .rpc('get_category_statistics', { user_id: user.id });
+        .rpc('get_category_statistics', { query_user_id: user.id });
         
       if (error) throw error;
       if (!data) return [];

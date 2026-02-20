@@ -331,7 +331,7 @@ export type Database = {
     Functions: {
       get_category_statistics: {
         Args: {
-          user_id: string
+          query_user_id: string
         }
         Returns: {
           name: string
@@ -343,7 +343,7 @@ export type Database = {
       }
       get_daily_review_stats: {
         Args: {
-          user_id: string
+          query_user_id: string
           start_date: string
         }
         Returns: {
@@ -355,7 +355,8 @@ export type Database = {
       }
       get_hourly_review_patterns: {
         Args: {
-          user_id: string
+          query_user_id: string
+          user_timezone?: string
         }
         Returns: {
           hour: number

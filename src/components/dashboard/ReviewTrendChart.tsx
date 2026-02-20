@@ -23,7 +23,7 @@ export default function ReviewTrendChart() {
       
       const { data, error } = await supabase
         .rpc('get_daily_review_stats', {
-          user_id: user.id,
+          query_user_id: user.id,
           start_date: thirtyDaysAgo.toISOString()
         });
         

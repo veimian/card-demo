@@ -21,7 +21,8 @@ export default function TimeAnalysis() {
       
       const { data, error } = await supabase
         .rpc('get_hourly_review_patterns', { 
-          user_id: user.id
+          query_user_id: user.id,
+          user_timezone: userTimezone
         });
         
       if (error) throw error;
