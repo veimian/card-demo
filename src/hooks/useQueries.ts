@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { Card, Category, Tag, CardWithDetails } from '../types/app'
 import { Database } from '../types/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { initialSRSState } from '../lib/srs'
 
 type CategoryInsert = Database['public']['Tables']['categories']['Insert']
 type TagInsert = Database['public']['Tables']['tags']['Insert']
@@ -154,9 +156,13 @@ export const useDeleteTag = () => {
 // --- Cards ---
 
 export const useCards = () => {
+  const { user } = useAuth()
+  
   return useQuery({
-    queryKey: ['cards'],
+    queryKey: ['cards', user?.id],
     queryFn: async () => {
+      if (!user) return []
+      
       const { data, error } = await supabase
         .from('cards')
         .select(`
@@ -166,12 +172,14 @@ export const useCards = () => {
             tags (*)
           )
         `)
+        .eq('user_id', user.id)  // Add user filter
         .order('created_at', { ascending: false })
 
       if (error) throw error
       
       return data as unknown as CardWithDetails[]
-    }
+    },
+    enabled: !!user  // Only fetch when user is logged in
   })
 }
 
@@ -306,9 +314,16 @@ export const useCreateCard = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (newCard: CardInsert) => {
+      // Initialize SRS fields for new cards
+      const cardWithSRS = {
+        ...newCard,
+        ...initialSRSState,
+        next_review: new Date().toISOString()  // Schedule for immediate review
+      }
+      
       const { data, error } = await supabase
         .from('cards')
-        .insert([newCard])
+        .insert([cardWithSRS])
         .select()
         .single()
       if (error) throw error

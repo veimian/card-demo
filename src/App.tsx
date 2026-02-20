@@ -8,6 +8,7 @@ import Categories from './pages/Categories'
 import Settings from './pages/Settings'
 import CardEditor from './pages/CardEditor'
 import SharedCard from './pages/SharedCard'
+import Review from './pages/Review'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/share/:token" element={<SharedCard />} />
         
         <Route element={<ProtectedRoute />}>
+          <Route path="/review" element={<Review />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/categories" element={<Categories />} />

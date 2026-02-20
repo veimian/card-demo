@@ -104,6 +104,10 @@ export type Database = {
           summary: string | null
           is_public: boolean
           share_token: string | null
+          next_review: string
+          interval: number
+          ease_factor: number
+          review_count: number
           created_at: string
           updated_at: string
         }
@@ -116,6 +120,10 @@ export type Database = {
           summary?: string | null
           is_public?: boolean
           share_token?: string | null
+          next_review?: string
+          interval?: number
+          ease_factor?: number
+          review_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -128,6 +136,10 @@ export type Database = {
           summary?: string | null
           is_public?: boolean
           share_token?: string | null
+          next_review?: string
+          interval?: number
+          ease_factor?: number
+          review_count?: number
           created_at?: string
           updated_at?: string
         }

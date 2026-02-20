@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import CardItem from '../components/CardItem'
-import { Search, Filter, Plus, ChevronDown, Trash2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Search, Filter, Plus, ChevronDown, Trash2, Brain, TrendingUp } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCards, useCategories, useDeleteCard } from '../hooks/useQueries'
 import Fuse from 'fuse.js'
 import { pinyin } from 'pinyin-pro'
@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext'
 
 export default function Home() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { data: cards = [], isLoading: loadingCards } = useCards()
   const { data: categories = [], isLoading: loadingCategories } = useCategories()
   const deleteCardMutation = useDeleteCard()
@@ -22,6 +23,20 @@ export default function Home() {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
 
   const loading = loadingCards || loadingCategories
+
+  // Calculate due cards for current user
+  const dueCardsCount = useMemo(() => {
+    if (!cards.length || !user) return 0
+    const now = new Date().toISOString()
+    return cards.filter(card => {
+      // Filter by current user first
+      if (card.user_id !== user.id) return false
+      
+      // If next_review is not set, treat as due (new cards)
+      const nextReview = card.next_review || new Date(0).toISOString()
+      return nextReview <= now
+    }).length
+  }, [cards, user])
 
   // Prepare data for search - include pinyin for better Chinese search experience
   const searchableCards = useMemo(() => {
@@ -115,6 +130,50 @@ export default function Home() {
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
+      {/* Review Section */}
+      <div className="bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="w-5 h-5 text-blue-100" />
+              <span className="text-blue-100 font-medium">记忆训练</span>
+            </div>
+            <h2 className="text-3xl font-bold mb-2">
+              {dueCardsCount > 0 ? `今日待复习: ${dueCardsCount} 张` : '所有卡片已完成复习'}
+            </h2>
+            <p className="text-blue-100 max-w-md">
+              {dueCardsCount > 0 
+                ? '保持记忆的最佳方式是定期复习。现在的每一次回顾，都是为了未来的长久记忆。' 
+                : '太棒了！您已经完成了目前的所有复习任务。可以去学习新知识，或者稍后再来。'}
+            </p>
+          </div>
+          
+          <div className="flex gap-3 w-full md:w-auto">
+            {dueCardsCount > 0 ? (
+              <button
+                onClick={() => navigate('/review')}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:bg-blue-50 transition-colors"
+              >
+                <Brain className="w-5 h-5" />
+                开始复习
+              </button>
+            ) : (
+              <Link
+                to="/card/new"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                创建新卡片
+              </Link>
+            )}
+          </div>
+        </div>
+        
+        {/* Decorative Background */}
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-48 h-48 bg-indigo-500/30 rounded-full blur-2xl pointer-events-none"></div>
+      </div>
+
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div className="relative flex-1 w-full sm:max-w-lg group">
