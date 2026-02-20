@@ -90,8 +90,17 @@ export default function AppLayout() {
            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
             <span>🧠</span> 知识卡片
           </h1>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-100 dark:from-blue-900 dark:to-indigo-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border border-blue-200 dark:border-blue-700 text-xs">
-              {user?.email?.[0].toUpperCase()}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSignOut}
+              className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              title="退出登录"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-100 dark:from-blue-900 dark:to-indigo-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border border-blue-200 dark:border-blue-700 text-xs">
+                {user?.email?.[0].toUpperCase()}
+            </div>
           </div>
         </div>
 

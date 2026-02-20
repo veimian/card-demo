@@ -60,8 +60,8 @@ export default function CategoryAnalysis() {
         知识分类分析
       </h3>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="h-[250px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[300px]">
+        <div className="h-full relative">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -79,13 +79,25 @@ export default function CategoryAnalysis() {
               </Pie>
               <Tooltip 
                 formatter={(value: number) => [value, '卡片数量']}
+                contentStyle={{ 
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                  borderRadius: '0.75rem',
+                  border: 'none',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                }}
               />
-              <Legend verticalAlign="bottom" height={36} />
             </PieChart>
           </ResponsiveContainer>
+          {/* Center Text */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              {categories.reduce((acc, curr) => acc + curr.count, 0)}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">总卡片</div>
+          </div>
         </div>
         
-        <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar h-full">
           {categories.map((category, index) => (
             <div key={category.name} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
               <div className="flex items-center gap-3">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import CardItem from '../components/CardItem'
 import { Search, Filter, Plus, ChevronDown, Trash2, Brain, TrendingUp } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -13,7 +13,12 @@ import { useAuth } from '../contexts/AuthContext'
 export default function Home() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { data: cards = [], isLoading: loadingCards } = useCards()
+  const { data: cards = [], isLoading: loadingCards, refetch: refetchCards } = useCards()
+  
+  // Refresh cards when focusing or navigating back
+  useEffect(() => {
+    refetchCards()
+  }, [refetchCards])
   const { data: categories = [], isLoading: loadingCategories } = useCategories()
   const deleteCardMutation = useDeleteCard()
   

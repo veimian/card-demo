@@ -24,9 +24,11 @@ export default function CommentsSection({ cardId }: CommentsSectionProps) {
       toast.error('请先登录以发表评论')
       return
     }
+    
     if (!newComment.trim()) return
 
     try {
+      // @ts-ignore - The mutation expects an object with specific shape
       await createCommentMutation.mutateAsync({
         card_id: cardId,
         content: newComment.trim(),

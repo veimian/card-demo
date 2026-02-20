@@ -1,14 +1,53 @@
 import { useParams } from 'react-router-dom'
-import { useCard } from '../hooks/useQueries'
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import ReactMarkdown from 'react-markdown'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { Sparkles, Calendar, Tag as TagIcon, Folder } from 'lucide-react'
 import CommentsSection from '../components/CommentsSection'
+import { CardWithDetails } from '../types/app'
 
 export default function SharedCard() {
   const { token } = useParams<{ token: string }>()
-  const { data: card, isLoading, error } = useCard(token || '')
+  const [card, setCard] = useState<CardWithDetails | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchSharedCard = async () => {
+      if (!token) {
+        setError('无效的分享链接')
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('cards')
+          .select(`
+            *,
+            categories (*),
+            card_tags (
+              tags (*)
+            )
+          `)
+          .eq('share_token', token)
+          .eq('is_public', true)
+          .single()
+
+        if (error) throw error
+        setCard(data as CardWithDetails)
+      } catch (err: any) {
+        console.error('Error fetching shared card:', err)
+        setError('无法加载卡片')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchSharedCard()
+  }, [token])
 
   if (isLoading) {
     return (
