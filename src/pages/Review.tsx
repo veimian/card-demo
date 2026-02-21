@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, X, RotateCcw, Clock, Brain } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Check, X, RotateCcw, Clock, Brain, Shuffle, ListChecks } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -22,6 +22,8 @@ interface ReviewCard extends Card {
 export default function Review() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isActiveMode = searchParams.get('mode') === 'active' // 主动复习：不限制到期，可选随机或自选
   const updateStreakMutation = useUpdateStreak()
   const [loading, setLoading] = useState(true)
   const [cards, setCards] = useState<ReviewCard[]>([])
@@ -29,6 +31,10 @@ export default function Review() {
   const [showAnswer, setShowAnswer] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [startTime, setStartTime] = useState(Date.now())
+  // 主动复习时的选择步骤：null=选择方式, random=已选随机, custom=自选卡片列表
+  const [activeChoice, setActiveChoice] = useState<'random' | 'custom' | null>(null)
+  const [allCardsForPick, setAllCardsForPick] = useState<ReviewCard[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const { isMobile } = useMobileOptimization()
 
@@ -79,39 +85,99 @@ export default function Review() {
     try {
       setLoading(true)
       const now = new Date().toISOString()
-      
       const { data, error } = await supabase
         .from('cards')
         .select('*')
         .eq('user_id', user!.id)
         .lte('next_review', now)
         .order('next_review', { ascending: true })
-        .limit(50) // Limit session size
-
+        .limit(50)
       if (error) throw error
-
-      // Initialize SRS fields if they are null (for old cards)
-      const initializedCards = data?.map(card => ({
+      const initializedCards = (data || []).map(card => ({
         ...card,
         interval: card.interval || 0,
         ease_factor: card.ease_factor || 2.5,
         review_count: card.review_count || 0
       })) as ReviewCard[]
-
       setCards(initializedCards)
     } catch (error) {
-      console.error('Error fetching due cards:', error)
+      console.error('Error fetching cards:', error)
       toast.error('获取复习卡片失败')
     } finally {
       setLoading(false)
     }
   }, [user])
 
+  const fetchRandomCards = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { data: allData, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (error) throw error
+      const list = (allData || []) as ReviewCard[]
+      const shuffled = [...list].sort(() => Math.random() - 0.5).slice(0, 50)
+      const initialized = shuffled.map(card => ({
+        ...card,
+        interval: card.interval || 0,
+        ease_factor: card.ease_factor || 2.5,
+        review_count: card.review_count || 0
+      })) as ReviewCard[]
+      setCards(initialized)
+    } catch (error) {
+      console.error('Error fetching cards:', error)
+      toast.error('获取复习卡片失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  const fetchAllForPick = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      const list = (data || []).map(card => ({
+        ...card,
+        interval: card.interval || 0,
+        ease_factor: card.ease_factor || 2.5,
+        review_count: card.review_count || 0
+      })) as ReviewCard[]
+      setAllCardsForPick(list)
+      setSelectedIds(new Set())
+    } catch (error) {
+      console.error('Error fetching cards:', error)
+      toast.error('获取卡片列表失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
-    if (user) {
+    if (!user) return
+    if (isActiveMode && activeChoice === null) {
+      setLoading(false)
+      return
+    }
+    if (isActiveMode && activeChoice === 'random') {
+      fetchRandomCards()
+      return
+    }
+    if (isActiveMode && activeChoice === 'custom') {
+      fetchAllForPick()
+      return
+    }
+    if (!isActiveMode) {
       fetchDueCards()
     }
-  }, [user, fetchDueCards])
+  }, [user, isActiveMode, activeChoice, fetchDueCards, fetchRandomCards, fetchAllForPick])
 
   useEffect(() => {
     setStartTime(Date.now())
@@ -182,15 +248,136 @@ export default function Review() {
     )
   }
 
+  // 主动复习：选择方式（随机 / 自选），仅当尚未开始复习时显示
+  if (isActiveMode && activeChoice === null && cards.length === 0) {
+    return (
+      <div className="max-w-lg mx-auto min-h-screen flex flex-col justify-center px-4 py-8">
+        <button
+          onClick={() => navigate('/')}
+          className="absolute top-4 left-4 p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">主动复习</h1>
+        <p className="text-gray-500 dark:text-gray-400 mb-6">选择本次要复习的卡片来源</p>
+        <div className="space-y-3">
+          <button
+            onClick={() => setActiveChoice('random')}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 bg-white dark:bg-gray-800 text-left transition-colors"
+          >
+            <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <Shuffle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <div className="font-semibold text-gray-900 dark:text-gray-100">随机抽取</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">从全部卡片中随机约 50 张</div>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveChoice('custom')}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 bg-white dark:bg-gray-800 text-left transition-colors"
+          >
+            <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+              <ListChecks className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <div className="font-semibold text-gray-900 dark:text-gray-100">自选卡片</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">勾选要复习的卡片后开始</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // 主动复习：自选卡片列表
+  if (isActiveMode && activeChoice === 'custom') {
+    if (allCardsForPick.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+          <p className="text-gray-500 dark:text-gray-400 mb-6">还没有卡片，去首页创建吧</p>
+          <button onClick={() => navigate('/')} className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700">
+            返回首页
+          </button>
+        </div>
+      )
+    }
+    const toggleId = (id: string) => {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    }
+    const selectAll = () => setSelectedIds(new Set(allCardsForPick.map(c => c.id)))
+    const clearAll = () => setSelectedIds(new Set())
+    const startWithSelected = () => {
+      if (selectedIds.size === 0) {
+        toast.error('请至少选择一张卡片')
+        return
+      }
+      const list = allCardsForPick.filter(c => selectedIds.has(c.id))
+      setCards(list)
+      setActiveChoice(null) // 进入复习状态（cards.length > 0 后会渲染下方复习 UI）
+    }
+    return (
+      <div className="max-w-2xl mx-auto min-h-screen flex flex-col px-4 py-6 pb-24">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => setActiveChoice(null)} className="p-2 -ml-2 text-gray-500 hover:text-gray-700">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">自选卡片</h1>
+          <div className="w-9" />
+        </div>
+        <div className="flex gap-2 mb-4">
+          <button onClick={selectAll} className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+            全选
+          </button>
+          <button onClick={clearAll} className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+            取消全选
+          </button>
+          <span className="ml-auto text-sm text-gray-500 dark:text-gray-400 self-center">已选 {selectedIds.size} 张</span>
+        </div>
+        <ul className="space-y-2 flex-1 overflow-y-auto">
+          {allCardsForPick.map(card => (
+            <li key={card.id}>
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(card.id)}
+                  onChange={() => toggleId(card.id)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                />
+                <span className="flex-1 text-gray-900 dark:text-gray-100 truncate">{card.title}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <button
+          onClick={startWithSelected}
+          className="mt-4 py-3 w-full rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
+          disabled={selectedIds.size === 0}
+        >
+          开始复习 ({selectedIds.size} 张)
+        </button>
+      </div>
+    )
+  }
+
   if (cards.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
         <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6">
           <Check className="w-12 h-12 text-green-600 dark:text-green-400" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">太棒了！</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          {isActiveMode ? '还没有卡片' : '太棒了！'}
+        </h1>
         <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8">
-          您已经完成了所有的待复习卡片。休息一下，稍后再来吧！
+          {isActiveMode
+            ? '主动复习需要至少一张卡片。去首页创建或从「待复习」进入吧。'
+            : '您已经完成了所有的待复习卡片。可到首页选择「主动复习」继续巩固。'}
         </p>
         <button
           onClick={() => navigate('/')}
@@ -217,6 +404,7 @@ export default function Review() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            {isActiveMode && <span className="text-blue-600 dark:text-blue-400 mr-1">主动复习</span>}
             {currentIndex + 1} / {cards.length}
           </div>
           <div className="w-9"></div> {/* Spacer */}

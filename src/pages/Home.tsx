@@ -153,24 +153,30 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="flex gap-3 w-full md:w-auto">
-            {dueCardsCount > 0 ? (
+          <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            {dueCardsCount > 0 && (
               <button
                 onClick={() => navigate('/review')}
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:bg-blue-50 transition-colors"
               >
                 <Brain className="w-5 h-5" />
-                开始复习
+                开始复习 ({dueCardsCount} 张待复习)
               </button>
-            ) : (
-              <Link
-                to="/card/new"
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                创建新卡片
-              </Link>
             )}
+            <button
+              onClick={() => navigate('/review?mode=active')}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm transition-colors border border-white/20"
+            >
+              <Brain className="w-5 h-5" />
+              主动复习
+            </button>
+            <Link
+              to="/card/new"
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              创建新卡片
+            </Link>
           </div>
         </div>
         
