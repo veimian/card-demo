@@ -109,8 +109,8 @@ export default function SharedCard() {
             </div>
           </div>
 
-          {/* AI Summary */}
-          {card.summary && (
+          {/* AI Summary：仅当有正文时单独展示摘要块，避免与正文重复 */}
+          {card.summary && card.content && (
             <div className="px-6 md:px-10 py-6 bg-blue-50/50 dark:bg-blue-900/10 border-b border-blue-100 dark:border-blue-800/30">
               <div className="flex gap-3">
                 <Sparkles className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -133,7 +133,7 @@ export default function SharedCard() {
                 )
               }}
             >
-              {card.content}
+              {card.content || card.summary}
             </ReactMarkdown>
           </div>
         </div>

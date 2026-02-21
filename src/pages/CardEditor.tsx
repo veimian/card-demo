@@ -38,6 +38,8 @@ export default function CardEditor() {
   const [tagInput, setTagInput] = useState('')
   const [generatingSummary, setGeneratingSummary] = useState(false)
   const [isPreview, setIsPreview] = useState(false)
+  /** 仅保存摘要：不上传文件到存储桶，数据库只存 AI 摘要（节省空间） */
+  const [saveSummaryOnly, setSaveSummaryOnly] = useState(true)
   
   // Sharing state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
@@ -64,50 +66,55 @@ export default function CardEditor() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const summaryOnly = saveSummaryOnly
+
     try {
       setUploading(true)
       setUploadProgress(0)
-      const toastId = toast.loading('正在上传文件...')
+      const toastId = toast.loading(summaryOnly ? '正在解析文件（不上传）...' : '正在上传文件...')
 
-      // 1. Upload file
-      const publicUrl = await uploadFile(file)
-      
-      toast.loading('正在解析文件内容...', { id: toastId })
-      
-      // 2. Process file in worker
+      // 仅保存摘要模式：不上传文件到存储桶，只解析文本供 AI 摘要
+      let publicUrl: string | null = null
+      if (!summaryOnly) {
+        publicUrl = await uploadFile(file)
+        toast.loading('正在解析文件内容...', { id: toastId })
+      }
+
+      // Process file in worker (extract text)
       if (workerRef.current) {
         workerRef.current.postMessage({ file, type: file.type })
-        
-        workerRef.current.onmessage = (event) => {
+
+        workerRef.current.onmessage = (event: MessageEvent) => {
           const { status, text, progress, error } = event.data
-          
+
           if (status === 'progress') {
             setUploadProgress(progress)
           } else if (status === 'complete') {
-            // 3. Update content
             const currentContent = watch('content') || ''
             let newContent = currentContent
-
-            // Add separator if content exists
             if (newContent) newContent += '\n\n'
 
-            // Add file link/image
-            if (file.type.startsWith('image/')) {
-              newContent += `![${file.name}](${publicUrl})\n`
+            if (summaryOnly) {
+              // 只追加解析出的文本，不写链接，不占存储桶
+              if (text) {
+                newContent += `--- ${file.name} 内容（仅用于 AI 摘要，不保存原文） ---\n${text}\n--- 结束 ---\n`
+              }
+              toast.success('解析完成，请点击「AI 摘要」生成摘要（文件未上传）', { id: toastId })
             } else {
-              newContent += `[${file.name}](${publicUrl})\n`
-            }
-
-            // Add extracted text
-            if (text) {
-              newContent += `\n--- ${file.name} 内容 ---\n${text}\n--- 结束 ---\n`
+              if (file.type.startsWith('image/')) {
+                newContent += `![${file.name}](${publicUrl})\n`
+              } else {
+                newContent += `[${file.name}](${publicUrl})\n`
+              }
+              if (text) {
+                newContent += `\n--- ${file.name} 内容 ---\n${text}\n--- 结束 ---\n`
+              }
+              toast.success('文件处理完成', { id: toastId })
             }
 
             setValue('content', newContent)
-            toast.success('文件处理完成', { id: toastId })
             setUploading(false)
             setUploadProgress(0)
-            // Reset input
             e.target.value = ''
           } else if (status === 'error') {
             console.error('Worker error:', error)
@@ -117,14 +124,12 @@ export default function CardEditor() {
           }
         }
       } else {
-        // Fallback or error if worker not available
         toast.error('文件处理器未初始化', { id: toastId })
         setUploading(false)
       }
-
     } catch (error: any) {
       console.error('File upload error:', error)
-      toast.error('文件上传失败: ' + error.message)
+      toast.error(summaryOnly ? '文件解析失败' : '文件上传失败: ' + error.message)
       setUploading(false)
       setUploadProgress(0)
     }
@@ -159,7 +164,7 @@ export default function CardEditor() {
         if (!card) throw new Error('Card not found')
         
         setValue('title', card.title)
-        setValue('content', card.content)
+        setValue('content', card.content || card.summary || '')
         setValue('summary', card.summary || '')
         setValue('category_id', card.category_id || '')
         
@@ -190,13 +195,16 @@ export default function CardEditor() {
       // 1. Set Summary and Title
       setValue('summary', result.summary)
       if (result.title) {
-        // Only set title if it's currently empty or user hasn't modified it much
         const currentTitle = watch('title')
         if (!currentTitle || currentTitle.trim() === '') {
           setValue('title', result.title)
         }
       }
-      
+      // 仅保存摘要模式：把摘要复制到正文
+      if (saveSummaryOnly) {
+        setValue('content', result.summary)
+      }
+
       // 2. Handle Category
       let categoryId = ''
       if (result.category) {
@@ -323,10 +331,11 @@ export default function CardEditor() {
 
     try {
       setSaving(true)
-      
+      // 仅保存摘要时：把摘要复制到正文，方便展示与编辑
+      const finalContent = saveSummaryOnly && data.summary ? data.summary : data.content
       const cardData = {
         title: data.title,
-        content: data.content,
+        content: finalContent,
         summary: data.summary,
         category_id: data.category_id || null,
         user_id: user.id
@@ -558,6 +567,17 @@ export default function CardEditor() {
             )}
             
             <div className="flex flex-wrap items-center gap-2 mb-4 md:mb-6">
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveSummaryOnly}
+                  onChange={(e) => setSaveSummaryOnly(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400" title="不上传文件到存储桶，数据库只存 AI 摘要">
+                  仅保存摘要（省空间）
+                </span>
+              </label>
               <label className={`group flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl cursor-pointer transition-all duration-200 border border-gray-100 dark:border-gray-700 hover:border-blue-100 dark:hover:border-blue-800 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <Upload className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
                 <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
@@ -667,6 +687,11 @@ export default function CardEditor() {
                 {generatingSummary ? '分析中...' : '一键生成'}
               </button>
             </div>
+            {saveSummaryOnly && (
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+                当前为「仅保存摘要」：文件不会上传，保存时只写入摘要到数据库。
+              </p>
+            )}
             <textarea
               {...register('summary')}
               rows={4}

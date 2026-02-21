@@ -235,23 +235,18 @@ export default function Review() {
       <div className="flex-1 flex flex-col px-4">
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 flex-1 flex flex-col min-h-[400px] overflow-hidden relative">
           
-          {/* Question Side (Always Visible) */}
+          {/* Question Side：开始时仅显示标题 */}
           <div className="p-8 flex-1 flex flex-col justify-center items-center text-center border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {currentCard.title}
             </h2>
-            {currentCard.summary && (
-              <p className="text-gray-500 dark:text-gray-400 max-w-lg">
-                {currentCard.summary}
-              </p>
-            )}
           </div>
 
           {/* Answer Side (Hidden initially) */}
           {showAnswer ? (
             <div className="p-8 flex-1 bg-gray-50 dark:bg-gray-800/50 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="prose dark:prose-invert max-w-none">
-                <div className="whitespace-pre-wrap">{currentCard.content}</div>
+                <div className="whitespace-pre-wrap">{currentCard.content || currentCard.summary}</div>
               </div>
             </div>
           ) : showHint ? (
@@ -262,7 +257,7 @@ export default function Review() {
               </div>
               <div className="prose dark:prose-invert max-w-none opacity-80">
                 <div className="whitespace-pre-wrap tracking-wide">
-                  {ContentObfuscator.obfuscateContent(currentCard.content || '', 0.6)}
+                  {ContentObfuscator.obfuscateContent(currentCard.content || currentCard.summary || '', 0.6)}
                 </div>
               </div>
             </div>

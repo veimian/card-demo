@@ -280,8 +280,9 @@ export default function Settings() {
         let mdContent = '# Knowledge Cards Backup\n\n'
         cards?.forEach(card => {
           mdContent += `## ${card.title}\n\n`
-          if (card.summary) mdContent += `> ${card.summary}\n\n`
-          mdContent += `${card.content}\n\n`
+          const body = card.content || card.summary || ''
+          if (card.summary && card.content) mdContent += `> ${card.summary}\n\n`
+          if (body) mdContent += `${body}\n\n`
           
           const tags = card.card_tags.map((ct: any) => ct.tags?.name).filter(Boolean).join(', ')
           if (tags) mdContent += `**Tags:** ${tags}\n`
