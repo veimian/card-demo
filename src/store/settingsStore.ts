@@ -2,14 +2,17 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 type Theme = 'light' | 'dark';
+export type SummaryLength = 'short' | 'standard' | 'long';
 
 interface SettingsState {
   theme: Theme;
   apiKey: string;
+  summaryLength: SummaryLength;
   
   // Actions
   setTheme: (theme: Theme) => void;
   setApiKey: (key: string) => void;
+  setSummaryLength: (length: SummaryLength) => void;
   toggleTheme: () => void;
 }
 
@@ -18,6 +21,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       theme: 'light',
       apiKey: '',
+      summaryLength: 'standard',
       
       setTheme: (theme) => {
         set({ theme });
@@ -34,10 +38,11 @@ export const useSettingsStore = create<SettingsState>()(
       },
       
       setApiKey: (apiKey) => set({ apiKey }),
+      setSummaryLength: (summaryLength) => set({ summaryLength }),
     }),
     {
       name: 'settings-storage',
-      partialize: (state) => ({ theme: state.theme, apiKey: state.apiKey }),
+      partialize: (state) => ({ theme: state.theme, apiKey: state.apiKey, summaryLength: state.summaryLength }),
       onRehydrateStorage: () => (state) => {
         // Apply theme on hydration
         if (state?.theme === 'dark') {

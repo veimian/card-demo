@@ -14,6 +14,7 @@ import { Dialog, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
 import { useUpdateCardSharing } from '../hooks/useQueries'
 import CommentsSection from '../components/CommentsSection'
+import { useSettingsStore, type SummaryLength } from '../store/settingsStore'
 
 interface CardForm {
   title: string
@@ -40,6 +41,7 @@ export default function CardEditor() {
   const [isPreview, setIsPreview] = useState(false)
   /** 仅保存摘要：不上传文件到存储桶，数据库只存 AI 摘要（节省空间） */
   const [saveSummaryOnly, setSaveSummaryOnly] = useState(true)
+  const [summaryCooldown, setSummaryCooldown] = useState(false)
   
   // Sharing state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
@@ -48,6 +50,7 @@ export default function CardEditor() {
   const [copied, setCopied] = useState(false)
   
   const updateSharingMutation = useUpdateCardSharing()
+  const { summaryLength, setSummaryLength } = useSettingsStore()
 
   const workerRef = useRef<Worker | null>(null)
 
@@ -186,11 +189,14 @@ export default function CardEditor() {
   }
 
   const handleGenerateSummary = async () => {
-    if (!content) return toast.error('请先输入内容')
-    
+    const raw = (content || '').trim()
+    if (!raw) return toast.error('请先输入或上传内容')
+    if (raw.length > 12000) {
+      toast('内容较长，将仅用前约 12000 字生成摘要', { icon: '📝', duration: 4000 })
+    }
     try {
       setGeneratingSummary(true)
-      const result = await generateSummary(content)
+      const result = await generateSummary(raw, summaryLength)
       
       // 1. Set Summary and Title
       setValue('summary', result.summary)
@@ -277,6 +283,8 @@ export default function CardEditor() {
       }
 
       toast.success('AI 智能分析完成')
+      setSummaryCooldown(true)
+      setTimeout(() => setSummaryCooldown(false), 1500)
     } catch (error: any) {
       toast.error(error.message || 'AI 分析失败')
     } finally {
@@ -328,7 +336,13 @@ export default function CardEditor() {
 
   const onSubmit = async (data: CardForm) => {
     if (!user) return
-
+    // 仅保存摘要且当前有较长原文时，二次确认避免误丢原文
+    if (saveSummaryOnly && data.summary && (data.content || '').length > 500) {
+      const hasFileMarker = /--- .* (内容|结束) ---/.test(data.content || '')
+      if (hasFileMarker || (data.content || '').length > 2000) {
+        if (!confirm('当前为「仅保存摘要」模式，保存后只保留摘要，原文将不再保留。确定保存？')) return
+      }
+    }
     try {
       setSaving(true)
       // 仅保存摘要时：把摘要复制到正文，方便展示与编辑
@@ -627,12 +641,12 @@ export default function CardEditor() {
               <button
                 type="button"
                 onClick={handleGenerateSummary}
-                disabled={generatingSummary || !content}
-                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-xl cursor-pointer transition-all duration-200 border border-blue-100 dark:border-blue-800 hover:border-blue-200 dark:hover:border-blue-700 group ml-auto lg:hidden"
+                disabled={generatingSummary || !content || summaryCooldown}
+                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-xl cursor-pointer transition-all duration-200 border border-blue-100 dark:border-blue-800 hover:border-blue-200 dark:hover:border-blue-700 group ml-auto lg:hidden disabled:opacity-50"
               >
                 <Sparkles className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                 <span className="text-xs md:text-sm font-medium text-blue-600 dark:text-blue-400">
-                  {generatingSummary ? '分析中...' : 'AI 分析'}
+                  {generatingSummary ? '分析中...' : summaryCooldown ? '请稍候' : 'AI 分析'}
                 </span>
               </button>
             </div>
@@ -681,11 +695,23 @@ export default function CardEditor() {
               <button
                 type="button"
                 onClick={handleGenerateSummary}
-                disabled={generatingSummary || !content}
+                disabled={generatingSummary || !content || summaryCooldown}
                 className="hidden lg:block text-xs font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 disabled:opacity-50 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg shadow-sm border border-blue-100 dark:border-blue-700 hover:shadow transition-all active:scale-95"
               >
-                {generatingSummary ? '分析中...' : '一键生成'}
+                {generatingSummary ? '分析中...' : summaryCooldown ? '请稍候' : '一键生成'}
               </button>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-blue-800 dark:text-blue-200">摘要长度</span>
+              <select
+                value={summaryLength}
+                onChange={(e) => setSummaryLength(e.target.value as SummaryLength)}
+                className="text-xs rounded-lg border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="short">简短 (50～80 字)</option>
+                <option value="standard">标准 (80～200 字)</option>
+                <option value="long">详细 (200～350 字)</option>
+              </select>
             </div>
             {saveSummaryOnly && (
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
@@ -695,7 +721,7 @@ export default function CardEditor() {
             <textarea
               {...register('summary')}
               rows={4}
-              placeholder="AI 将自动生成摘要..."
+              placeholder="输入或上传内容后，点击「一键生成」获取摘要；长文会自动截断前 12000 字"
               className="w-full bg-white/60 dark:bg-gray-800/60 border border-blue-100 dark:border-blue-800 rounded-xl px-3 py-2 md:px-4 md:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-blue-300/50 dark:placeholder-blue-400/30 text-blue-900 dark:text-blue-100"
             />
           </div>
