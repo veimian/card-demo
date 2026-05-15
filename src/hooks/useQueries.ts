@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { Card, Category, Tag, CardWithDetails } from '../types/app'
+import { Category, Tag, CardWithDetails } from '../types/app'
 import { Database } from '../types/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { initialSRSState } from '../lib/srs'
@@ -219,7 +219,7 @@ export const useCard = (idOrToken: string) => {
       // We need to determine if it's a UUID (ID) or potentially a token?
       // Actually, let's try to query by ID first.
       
-      let query = supabase
+      const query = supabase
         .from('cards')
         .select(`
           *,
@@ -231,9 +231,10 @@ export const useCard = (idOrToken: string) => {
         .eq('id', idOrToken)
         .single()
         
-      let { data, error } = await query
+      const { data: cardData, error: cardError } = await query
+      let data = cardData
       
-      if (error || !data) {
+      if (cardError || !data) {
         // If not found by ID, try by share_token
         const tokenQuery = supabase
           .from('cards')
@@ -318,10 +319,15 @@ export const useDeleteComment = () => {
 export const useUpdateCardSharing = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, is_public }: { id: string, is_public: boolean }) => {
+    mutationFn: async ({ id, is_public, share_token }: { id: string, is_public: boolean, share_token?: string | null }) => {
+      const updates = {
+        is_public,
+        ...(is_public && !share_token ? { share_token: crypto.randomUUID() } : {})
+      }
+
       const { data, error } = await supabase
         .from('cards')
-        .update({ is_public })
+        .update(updates)
         .eq('id', id)
         .select()
         .single()

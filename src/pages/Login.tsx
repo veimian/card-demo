@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
+  const { session } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (session) navigate('/', { replace: true })
+  }, [session, navigate])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,8 +29,8 @@ export default function Login() {
       
       toast.success('登录成功')
       navigate('/')
-    } catch (error: any) {
-      toast.error(error.message || '登录失败')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '登录失败')
     } finally {
       setLoading(false)
     }

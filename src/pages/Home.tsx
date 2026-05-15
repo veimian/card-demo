@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import CardItem from '../components/CardItem'
-import { Search, Filter, Plus, ChevronDown, Trash2, Brain, TrendingUp } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Search, Plus, ChevronDown, Trash2, Brain } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCards, useCategories, useDeleteCard } from '../hooks/useQueries'
 import Fuse from 'fuse.js'
 import { pinyin } from 'pinyin-pro'
@@ -13,12 +13,8 @@ import { useAuth } from '../contexts/AuthContext'
 export default function Home() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { data: cards = [], isLoading: loadingCards, refetch: refetchCards } = useCards()
-  
-  // Refresh cards when focusing or navigating back
-  useEffect(() => {
-    refetchCards()
-  }, [refetchCards])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { data: cards = [], isLoading: loadingCards } = useCards()
   const { data: categories = [], isLoading: loadingCategories } = useCategories()
   const deleteCardMutation = useDeleteCard()
   
@@ -28,6 +24,30 @@ export default function Home() {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
 
   const loading = loadingCards || loadingCategories
+  const categoryParam = searchParams.get('category')
+  const tagParam = searchParams.get('tag')
+
+  useEffect(() => {
+    setSelectedCategory(categoryParam || 'all')
+  }, [categoryParam])
+
+  useEffect(() => {
+    if (tagParam) {
+      setSearchQuery(tagParam)
+    }
+  }, [tagParam])
+
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId)
+    const nextParams = new URLSearchParams(searchParams)
+    if (categoryId === 'all') {
+      nextParams.delete('category')
+    } else {
+      nextParams.set('category', categoryId)
+    }
+    nextParams.delete('tag')
+    setSearchParams(nextParams, { replace: true })
+  }
 
   // Calculate due cards for current user
   const dueCardsCount = useMemo(() => {
@@ -91,7 +111,7 @@ export default function Home() {
     }
 
     return result
-  }, [cards, searchQuery, selectedCategory, fuse])
+  }, [cards, searchQuery, selectedCategory, fuse, user])
 
   const selectedCategoryData = useMemo(() => {
     if (selectedCategory === 'all') return { name: '所有分类', color: null }
@@ -234,7 +254,7 @@ export default function Home() {
            )}
 
           <div className="relative flex-1 sm:flex-none min-w-[140px] max-w-[180px]">
-            <Listbox value={selectedCategory} onChange={setSelectedCategory}>
+            <Listbox value={selectedCategory} onChange={handleCategoryChange}>
               <div className="relative mt-1">
                 <Listbox.Button className="relative w-full cursor-default rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm py-3 pl-3 pr-8 text-left border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-white/75 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-300 sm:text-sm transition-all duration-200 text-gray-900 dark:text-gray-100">
                   <span className="flex items-center gap-2 truncate">

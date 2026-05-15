@@ -2,6 +2,22 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+type UserStats = {
+  current_streak?: number | null;
+  total_reviews?: number | null;
+  cards_created?: number | null;
+};
+
+type ReviewLog = {
+  rating: number | null;
+  review_date: string;
+};
+
+function getLocalDateString(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().split('T')[0];
+}
+
 export interface Achievement {
   id: string;
   name: string;
@@ -76,7 +92,7 @@ export function useAchievements() {
       
       const { data: logs } = await supabase
         .from('review_logs')
-        .select('*')
+        .select('rating, review_date')
         .eq('user_id', user.id)
         .gte('review_date', thirtyDaysAgo.toISOString());
       
@@ -98,8 +114,8 @@ export function useAchievements() {
 
 function checkRequirement(
   req: Achievement['requirement'], 
-  stats: any, 
-  logs: any[]
+  stats: UserStats, 
+  logs: ReviewLog[]
 ): boolean {
   if (!stats) return false;
 
@@ -111,13 +127,23 @@ function checkRequirement(
     case 'streak_days':
       return (stats.current_streak || 0) >= req.value;
     case 'perfect_reviews':
-      // 简单实现：检查最近7天是否有每天都复习且评分都是5
-      // 这里简化为：检查 logs 中是否有连续7天评分 >= 4
-      // 原需求：一周内所有复习都评为"简单"
-      // 这比较难判断，这里简化为：总共有 X 天的所有复习都是简单
-      // 或者简化为：连续7天打卡
-      return (stats.current_streak || 0) >= req.value && logs.some(l => l.rating === 5);
+      return hasPerfectRecentDays(logs, req.value);
     default:
       return false;
   }
+}
+
+function hasPerfectRecentDays(logs: ReviewLog[], days: number): boolean {
+  const logsByDay = logs.reduce<Record<string, ReviewLog[]>>((acc, log) => {
+    const day = getLocalDateString(new Date(log.review_date));
+    acc[day] = [...(acc[day] || []), log];
+    return acc;
+  }, {});
+
+  return Array.from({ length: days }).every((_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - index);
+    const dayLogs = logsByDay[getLocalDateString(date)] || [];
+    return dayLogs.length > 0 && dayLogs.every(log => log.rating === 5);
+  });
 }

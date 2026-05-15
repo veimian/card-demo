@@ -96,22 +96,48 @@ function safeParseMemoryEnhancement(raw: string): MemoryEnhancement {
 
 class AIService {
   private openai: OpenAI | null = null;
+  private currentApiKey: string | null = null;
   
   private async getApiKey(): Promise<string | null> {
-    // 1. Try LocalStorage
-    let apiKey = localStorage.getItem('deepseek_api_key') || import.meta.env.VITE_DEEPSEEK_API_KEY
+    const persistedSettings = localStorage.getItem('settings-storage')
+    let settingsApiKey: string | null = null
+    if (persistedSettings) {
+      try {
+        const parsed = JSON.parse(persistedSettings)
+        settingsApiKey = parsed?.state?.apiKey || null
+      } catch (error) {
+        console.error('Failed to parse local AI settings:', error)
+      }
+    }
+
+    let apiKey =
+      settingsApiKey ||
+      localStorage.getItem('deepseek_api_key') ||
+      import.meta.env.VITE_DEEPSEEK_API_KEY
     
-    // 2. Try System Settings (if not in local storage)
+    // Admins may use the system fallback. Regular users should configure
+    // their own key locally so the shared key is not exposed to every client.
     if (!apiKey) {
       try {
-        const { data } = await supabase
+        const { data: authData } = await supabase.auth.getUser()
+        if (!authData.user) return null
+
+        const { data: profile } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', authData.user.id)
+          .single()
+
+        if (profile?.role !== 'admin') return null
+
+        const { data: settings } = await supabase
           .from('system_settings')
           .select('value')
           .eq('key', 'deepseek_default_key')
           .single()
         
-        if (data?.value) {
-          apiKey = data.value
+        if (settings?.value) {
+          apiKey = settings.value
         }
       } catch (error) {
         console.error('Failed to fetch default API key:', error)
@@ -127,17 +153,20 @@ class AIService {
       throw new Error('请先在设置中配置 DeepSeek API Key');
     }
 
+    if (this.openai && this.currentApiKey === apiKey) {
+      return
+    }
+
     this.openai = new OpenAI({
       apiKey: apiKey,
       baseURL: 'https://api.deepseek.com',
       dangerouslyAllowBrowser: true
     });
+    this.currentApiKey = apiKey
   }
 
   async generateSummary(content: string, lengthOption: SummaryLengthOption = 'standard'): Promise<AIAnalysisResult> {
-    if (!this.openai) {
-      await this.initClient();
-    }
+    await this.initClient();
 
     const lengthDesc = {
       short: '50～80 字，极简概括核心一点',
@@ -185,7 +214,7 @@ class AIService {
 
       try {
         return JSON.parse(result) as AIAnalysisResult
-      } catch (e) {
+      } catch {
         console.error('Failed to parse JSON response:', result)
         // Fallback for non-JSON response
         return {
@@ -195,13 +224,15 @@ class AIService {
           tags: []
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('DeepSeek API Error:', error)
+      const apiError = error as { status?: number; message?: string }
       // Force re-init on next call if unauthorized (key might be invalid)
-      if (error.status === 401) {
+      if (apiError.status === 401) {
         this.openai = null;
+        this.currentApiKey = null;
       }
-      throw new Error(error.message || '生成摘要失败')
+      throw new Error(apiError.message || '生成摘要失败')
     }
   }
 
@@ -214,7 +245,7 @@ class AIService {
    * 结构化知识卡片生成：从正文生成 KnowledgeCard，temperature=0.4，强制 JSON 输出并安全解析
    */
   async generateKnowledgeCard(content: string): Promise<KnowledgeCard> {
-    if (!this.openai) await this.initClient()
+    await this.initClient()
 
     const maxLen = 12000
     const truncatedContent = content.length > maxLen ? content.slice(0, maxLen) + '\n...(后文已截断)' : content
@@ -236,7 +267,10 @@ class AIService {
       return safeParseKnowledgeCard(raw)
     } catch (error: unknown) {
       const err = error as { status?: number }
-      if (err?.status === 401) this.openai = null
+      if (err?.status === 401) {
+        this.openai = null
+        this.currentApiKey = null
+      }
       console.error('generateKnowledgeCard error:', error)
       throw new Error(error instanceof Error ? error.message : '生成知识卡片失败')
     }
@@ -246,7 +280,7 @@ class AIService {
    * 根据知识卡片生成复习题（概念理解→情境迁移→深度思考，梯度递进），temperature=0.4，JSON 强制输出
    */
   async generateReviewQuestions(card: KnowledgeCard): Promise<ReviewQuestions> {
-    if (!this.openai) await this.initClient()
+    await this.initClient()
 
     try {
       const userContent = JSON.stringify(card, null, 0)
@@ -266,7 +300,10 @@ class AIService {
       return safeParseReviewQuestions(raw)
     } catch (error: unknown) {
       const err = error as { status?: number }
-      if (err?.status === 401) this.openai = null
+      if (err?.status === 401) {
+        this.openai = null
+        this.currentApiKey = null
+      }
       console.error('generateReviewQuestions error:', error)
       throw new Error(error instanceof Error ? error.message : '生成复习题失败')
     }
@@ -276,7 +313,7 @@ class AIService {
    * 根据知识卡片生成记忆强化（口诀 / 类比 / 核心洞察），temperature=0.6，JSON 强制输出
    */
   async generateLearningEnhancement(card: KnowledgeCard): Promise<MemoryEnhancement> {
-    if (!this.openai) await this.initClient()
+    await this.initClient()
 
     try {
       const userContent = JSON.stringify(card, null, 0)
@@ -296,7 +333,10 @@ class AIService {
       return safeParseMemoryEnhancement(raw)
     } catch (error: unknown) {
       const err = error as { status?: number }
-      if (err?.status === 401) this.openai = null
+      if (err?.status === 401) {
+        this.openai = null
+        this.currentApiKey = null
+      }
       console.error('generateLearningEnhancement error:', error)
       throw new Error(error instanceof Error ? error.message : '生成记忆强化失败')
     }

@@ -2,6 +2,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+function getLocalDateString(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().split('T')[0];
+}
+
 export function useUpdateStreak() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -14,22 +19,24 @@ export function useUpdateStreak() {
     }) => {
       if (!user) throw new Error('No user');
       
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       
       // 记录复习日志
-      await supabase.from('review_logs').insert([{
+      const { error: logError } = await supabase.from('review_logs').insert([{
         user_id: user.id,
         card_id: reviewData.cardId,
         rating: reviewData.rating,
         time_spent: reviewData.timeSpent
       }]);
+      if (logError) throw logError;
       
       // 获取当前统计
-      const { data: currentStats } = await supabase
+      const { data: currentStats, error: statsError } = await supabase
         .from('user_stats')
         .select('*')
         .eq('user_id', user.id)
         .single();
+      if (statsError && statsError.code !== 'PGRST116') throw statsError;
       
       let newStreak = currentStats?.current_streak || 0;
       const lastReviewDate = currentStats?.last_review_date;
@@ -44,7 +51,7 @@ export function useUpdateStreak() {
       } else {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = getLocalDateString(yesterday);
         
         if (lastReviewDate === yesterdayStr) {
           // 连续复习
@@ -73,6 +80,9 @@ export function useUpdateStreak() {
       queryClient.invalidateQueries({ queryKey: ['streak'] });
       queryClient.invalidateQueries({ queryKey: ['achievements'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['review-trend'] });
+      queryClient.invalidateQueries({ queryKey: ['time-analysis'] });
+      queryClient.invalidateQueries({ queryKey: ['category-analysis'] });
     }
   });
 }

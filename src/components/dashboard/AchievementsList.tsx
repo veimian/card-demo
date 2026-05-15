@@ -1,5 +1,5 @@
 import { useAchievements, Achievement } from '../../hooks/useAchievements';
-import { Award, Lock, CheckCircle } from 'lucide-react';
+import { Lock, CheckCircle } from 'lucide-react';
 
 export default function AchievementsList() {
   const { achievements, isLoading } = useAchievements();

@@ -23,18 +23,20 @@ export default function StreakTracker() {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       
-      const { data: todayReviews } = await supabase
+      const { data: todayReviews, error: todayReviewsError } = await supabase
         .from('review_logs')
         .select('id')
         .eq('user_id', user.id)
         .gte('review_date', todayStart.toISOString());
+      if (todayReviewsError) throw todayReviewsError;
       
       // 获取用户统计
-      const { data: stats } = await supabase
+      const { data: stats, error: statsError } = await supabase
         .from('user_stats')
         .select('*')
         .eq('user_id', user.id)
         .single();
+      if (statsError && statsError.code !== 'PGRST116') throw statsError;
       
       const dailyGoal = stats?.daily_goal || 10;
       const todayCount = todayReviews?.length || 0;
@@ -123,7 +125,7 @@ function ProgressBar({ current, total, streak, completionRate }: { current: numb
     <div className="space-y-2">
       <div className="flex justify-between text-sm">
         <span className="text-gray-600 dark:text-gray-400">
-          今日目标完成度
+          今日目标完成度 {Math.round(current)} / {total}
         </span>
         <span className="font-medium text-gray-900 dark:text-gray-100">
           🔥 {streak} 天

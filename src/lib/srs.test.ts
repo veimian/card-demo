@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateNextReview, Rating } from '../lib/srs';
+import { calculateNextReview } from '../lib/srs';
 
 describe('SRS Algorithm (SM-2)', () => {
   it('should schedule new card for 1 day on correct answer', () => {

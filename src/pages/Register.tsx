@@ -1,14 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Register() {
+  const { session } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (session) navigate('/', { replace: true })
+  }, [session, navigate])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,8 +42,8 @@ export default function Register() {
         toast.success('注册成功，请登录')
         navigate('/login')
       }
-    } catch (error: any) {
-      toast.error(error.message || '注册失败')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '注册失败')
     } finally {
       setLoading(false)
     }

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import StatsOverview from '../components/dashboard/StatsOverview';
 import ReviewTrendChart from '../components/dashboard/ReviewTrendChart';
 import CategoryAnalysis from '../components/dashboard/CategoryAnalysis';
@@ -7,8 +6,6 @@ import StreakTracker from '../components/StreakTracker';
 import AchievementsList from '../components/dashboard/AchievementsList';
 
 export default function Dashboard() {
-  const [timeRange, setTimeRange] = useState<'30d'>('30d'); // Currently only 30d supported by backend
-  
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20 md:pb-0">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

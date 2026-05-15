@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Save, Key, User, Smartphone, Palette, Moon, Sun, Download, Upload, FileText, Wrench } from 'lucide-react'
+import { Save, Key, User, Palette, Moon, Sun, Download, Upload, FileText, Wrench } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useSettingsStore } from '../store/settingsStore'
@@ -219,9 +219,9 @@ export default function Settings() {
       toast.success('密码已更新')
       setNewPassword('')
       setConfirmPassword('')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating password:', error)
-      toast.error(error.message || '密码更新失败')
+      toast.error(error instanceof Error ? error.message : '密码更新失败')
     } finally {
       setChangingPassword(false)
     }
@@ -230,11 +230,14 @@ export default function Settings() {
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
       setStoreApiKey('')
+      localStorage.removeItem('deepseek_api_key')
       toast.success('API Key 已清除')
       return
     }
     
-    setStoreApiKey(apiKey.trim())
+    const trimmedKey = apiKey.trim()
+    setStoreApiKey(trimmedKey)
+    localStorage.setItem('deepseek_api_key', trimmedKey)
     toast.success('API Key 已保存')
   }
 
@@ -284,7 +287,10 @@ export default function Settings() {
           if (card.summary && card.content) mdContent += `> ${card.summary}\n\n`
           if (body) mdContent += `${body}\n\n`
           
-          const tags = card.card_tags.map((ct: any) => ct.tags?.name).filter(Boolean).join(', ')
+          const tags = card.card_tags
+            .map((ct: { tags?: { name?: string | null } | null }) => ct.tags?.name)
+            .filter(Boolean)
+            .join(', ')
           if (tags) mdContent += `**Tags:** ${tags}\n`
           if (card.categories) mdContent += `**Category:** ${card.categories.name}\n`
           mdContent += `\n---\n\n`
@@ -559,7 +565,7 @@ export default function Settings() {
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
                         className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 sm:text-sm transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-                        placeholder={defaultApiKey ? "系统已配置默认 Key，您可以设置自己的以覆盖" : "sk-..."}
+                        placeholder={defaultApiKey && isAdmin ? "系统已配置管理员默认 Key，您可以设置自己的以覆盖" : "sk-..."}
                       />
                     </div>
                     <button
@@ -612,7 +618,7 @@ export default function Settings() {
                     </button>
                   </div>
                   <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                    此 Key 将作为所有用户的默认 Key。用户可以在上方设置自己的 Key 来覆盖此默认值。
+                    此 Key 仅供管理员账户作为备用 Key 使用。普通用户请在 AI 配置中保存自己的 Key。
                   </p>
                 </div>
               </div>

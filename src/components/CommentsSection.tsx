@@ -5,9 +5,21 @@ import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { MessageSquare, Send, Trash2, User } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Link } from 'react-router-dom'
 
 interface CommentsSectionProps {
   cardId: string
+}
+
+interface CommentWithUser {
+  id: string
+  user_id: string
+  content: string
+  created_at: string
+  users?: {
+    name?: string | null
+    email?: string | null
+  } | null
 }
 
 export default function CommentsSection({ cardId }: CommentsSectionProps) {
@@ -28,7 +40,6 @@ export default function CommentsSection({ cardId }: CommentsSectionProps) {
     if (!newComment.trim()) return
 
     try {
-      // @ts-ignore - The mutation expects an object with specific shape
       await createCommentMutation.mutateAsync({
         card_id: cardId,
         content: newComment.trim(),
@@ -74,7 +85,7 @@ export default function CommentsSection({ cardId }: CommentsSectionProps) {
             暂无评论，快来抢沙发吧！
           </div>
         ) : (
-          comments.map((comment: any) => (
+          (comments as CommentWithUser[]).map((comment) => (
             <div key={comment.id} className="flex gap-4 group">
               <div className="flex-shrink-0">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border border-white dark:border-gray-600 shadow-sm">
@@ -129,7 +140,7 @@ export default function CommentsSection({ cardId }: CommentsSectionProps) {
         </form>
       ) : (
         <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-sm text-blue-800 dark:text-blue-200">
-          请 <a href="/login" className="font-semibold underline">登录</a> 后参与讨论
+          请 <Link to="/login" className="font-semibold underline">登录</Link> 后参与讨论
         </div>
       )}
     </div>

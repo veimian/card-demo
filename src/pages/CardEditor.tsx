@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
@@ -15,6 +15,7 @@ import { Fragment } from 'react'
 import { useUpdateCardSharing } from '../hooks/useQueries'
 import CommentsSection from '../components/CommentsSection'
 import { useSettingsStore, type SummaryLength } from '../store/settingsStore'
+import { initialSRSState } from '../lib/srs'
 
 interface CardForm {
   title: string
@@ -52,18 +53,8 @@ export default function CardEditor() {
   const updateSharingMutation = useUpdateCardSharing()
   const { summaryLength, setSummaryLength } = useSettingsStore()
 
-  const workerRef = useRef<Worker | null>(null)
-
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CardForm>()
   const content = watch('content')
-
-  useEffect(() => {
-    // Initialize worker
-    workerRef.current = new FileProcessorWorker()
-    return () => {
-      workerRef.current?.terminate()
-    }
-  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -83,56 +74,55 @@ export default function CardEditor() {
         toast.loading('正在解析文件内容...', { id: toastId })
       }
 
-      // Process file in worker (extract text)
-      if (workerRef.current) {
-        workerRef.current.postMessage({ file, type: file.type })
+      // Process each file in an isolated worker so quick consecutive uploads
+      // cannot overwrite each other's message handlers.
+      const worker = new FileProcessorWorker()
+      worker.onmessage = (event: MessageEvent) => {
+        const { status, text, progress, error } = event.data
 
-        workerRef.current.onmessage = (event: MessageEvent) => {
-          const { status, text, progress, error } = event.data
+        if (status === 'progress') {
+          setUploadProgress(progress)
+        } else if (status === 'complete') {
+          const currentContent = watch('content') || ''
+          let newContent = currentContent
+          if (newContent) newContent += '\n\n'
 
-          if (status === 'progress') {
-            setUploadProgress(progress)
-          } else if (status === 'complete') {
-            const currentContent = watch('content') || ''
-            let newContent = currentContent
-            if (newContent) newContent += '\n\n'
-
-            if (summaryOnly) {
-              // 只追加解析出的文本，不写链接，不占存储桶
-              if (text) {
-                newContent += `--- ${file.name} 内容（仅用于 AI 摘要，不保存原文） ---\n${text}\n--- 结束 ---\n`
-              }
-              toast.success('解析完成，请点击「AI 摘要」生成摘要（文件未上传）', { id: toastId })
-            } else {
-              if (file.type.startsWith('image/')) {
-                newContent += `![${file.name}](${publicUrl})\n`
-              } else {
-                newContent += `[${file.name}](${publicUrl})\n`
-              }
-              if (text) {
-                newContent += `\n--- ${file.name} 内容 ---\n${text}\n--- 结束 ---\n`
-              }
-              toast.success('文件处理完成', { id: toastId })
+          if (summaryOnly) {
+            // 只追加解析出的文本，不写链接，不占存储桶
+            if (text) {
+              newContent += `--- ${file.name} 内容（仅用于 AI 摘要，不保存原文） ---\n${text}\n--- 结束 ---\n`
             }
-
-            setValue('content', newContent)
-            setUploading(false)
-            setUploadProgress(0)
-            e.target.value = ''
-          } else if (status === 'error') {
-            console.error('Worker error:', error)
-            toast.error('文件解析失败: ' + error, { id: toastId })
-            setUploading(false)
-            setUploadProgress(0)
+            toast.success('解析完成，请点击「AI 摘要」生成摘要（文件未上传）', { id: toastId })
+          } else {
+            if (file.type.startsWith('image/')) {
+              newContent += `![${file.name}](${publicUrl})\n`
+            } else {
+              newContent += `[${file.name}](${publicUrl})\n`
+            }
+            if (text) {
+              newContent += `\n--- ${file.name} 内容 ---\n${text}\n--- 结束 ---\n`
+            }
+            toast.success('文件处理完成', { id: toastId })
           }
+
+          setValue('content', newContent)
+          setUploading(false)
+          setUploadProgress(0)
+          e.target.value = ''
+          worker.terminate()
+        } else if (status === 'error') {
+          console.error('Worker error:', error)
+          toast.error('文件解析失败: ' + error, { id: toastId })
+          setUploading(false)
+          setUploadProgress(0)
+          worker.terminate()
         }
-      } else {
-        toast.error('文件处理器未初始化', { id: toastId })
-        setUploading(false)
       }
-    } catch (error: any) {
+      worker.postMessage({ file, type: file.type })
+    } catch (error) {
       console.error('File upload error:', error)
-      toast.error(summaryOnly ? '文件解析失败' : '文件上传失败: ' + error.message)
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error(summaryOnly ? '文件解析失败' : '文件上传失败: ' + message)
       setUploading(false)
       setUploadProgress(0)
     }
@@ -143,17 +133,32 @@ export default function CardEditor() {
   }, [id])
 
   const fetchInitialData = async () => {
+    if (!user) return
+
     try {
       setLoading(true)
       
       // Fetch categories and tags
       const [categoriesRes, tagsRes] = await Promise.all([
-        supabase.from('categories').select('*').order('order_index'),
-        supabase.from('tags').select('*').order('name')
+        supabase.from('categories').select('*').eq('user_id', user.id).order('order_index'),
+        supabase
+          .from('tags')
+          .select(`
+            *,
+            card_tags!inner(
+              card_id,
+              cards!inner(user_id)
+            )
+          `)
+          .eq('card_tags.cards.user_id', user.id)
+          .order('name')
       ])
 
       if (categoriesRes.data) setCategories(categoriesRes.data)
-      if (tagsRes.data) setAvailableTags(tagsRes.data)
+      if (tagsRes.data) {
+        const uniqueTags = Array.from(new Map(tagsRes.data.map(tag => [tag.id, tag])).values())
+        setAvailableTags(uniqueTags)
+      }
 
       // Fetch card data if editing
       if (!isNew && id) {
@@ -161,6 +166,7 @@ export default function CardEditor() {
           .from('cards')
           .select('*, card_tags(tags(*))')
           .eq('id', id)
+          .eq('user_id', user.id)
           .single()
 
         if (error) throw error
@@ -176,7 +182,9 @@ export default function CardEditor() {
         setShareToken(card.share_token)
         
         if (card.card_tags) {
-          const tags = card.card_tags.map((ct: any) => ct.tags).filter(Boolean)
+          const tags = card.card_tags
+            .map((ct: { tags: Tag | null }) => ct.tags)
+            .filter((tag): tag is Tag => Boolean(tag))
           setSelectedTags(tags)
         }
       }
@@ -229,7 +237,7 @@ export default function CardEditor() {
                 name: result.category,
                 user_id: user?.id,
                 order_index: categories.length
-              } as any)
+              })
               .select()
               .single()
               
@@ -261,7 +269,7 @@ export default function CardEditor() {
             try {
               const { data: newTag, error } = await supabase
                 .from('tags')
-                .insert({ name: tagName } as any)
+                .insert({ name: tagName })
                 .select()
                 .single()
                 
@@ -285,8 +293,8 @@ export default function CardEditor() {
       toast.success('AI 智能分析完成')
       setSummaryCooldown(true)
       setTimeout(() => setSummaryCooldown(false), 1500)
-    } catch (error: any) {
-      toast.error(error.message || 'AI 分析失败')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'AI 分析失败')
     } finally {
       setGeneratingSummary(false)
     }
@@ -311,7 +319,7 @@ export default function CardEditor() {
         try {
           const { data, error } = await supabase
             .from('tags')
-            .insert({ name: tagName } as any)
+            .insert({ name: tagName })
             .select()
             .single()
             
@@ -360,7 +368,11 @@ export default function CardEditor() {
       if (isNew) {
         const { data: newCard, error } = await supabase
           .from('cards')
-          .insert(cardData as any)
+          .insert({
+            ...cardData,
+            ...initialSRSState,
+            next_review: new Date().toISOString()
+          })
           .select()
           .single()
         
@@ -370,8 +382,9 @@ export default function CardEditor() {
       } else {
         const { error } = await supabase
           .from('cards')
-          .update(cardData as any)
+          .update(cardData)
           .eq('id', id)
+          .eq('user_id', user.id)
         
         if (error) throw error
       }
@@ -392,7 +405,7 @@ export default function CardEditor() {
           
           const { error: tagError } = await supabase
             .from('card_tags')
-            .insert(tagInserts as any)
+            .insert(tagInserts)
           
           if (tagError) throw tagError
         }
@@ -412,8 +425,9 @@ export default function CardEditor() {
     if (!id) return
     try {
       const newIsPublic = !isPublic
-      await updateSharingMutation.mutateAsync({ id, is_public: newIsPublic })
+      const updatedCard = await updateSharingMutation.mutateAsync({ id, is_public: newIsPublic, share_token: shareToken })
       setIsPublic(newIsPublic)
+      setShareToken(updatedCard.share_token)
       toast.success(newIsPublic ? '卡片已公开' : '卡片已设为私有')
     } catch (error) {
       console.error('Error updating sharing:', error)
@@ -430,7 +444,13 @@ export default function CardEditor() {
     toast.success('链接已复制')
   }
 
-  // ... (render logic)
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-5xl mx-auto pb-20 md:pb-0">
@@ -655,7 +675,7 @@ export default function CardEditor() {
               <div className="w-full min-h-[300px] md:min-h-[500px] prose prose-blue dark:prose-invert max-w-none bg-white/50 dark:bg-gray-900/50 rounded-xl p-4 border border-transparent">
                 <ReactMarkdown 
                   components={{
-                    img: ({node, ...props}) => (
+                    img: ({ ...props }) => (
                       <img {...props} className="rounded-lg shadow-sm max-h-96 object-contain mx-auto" alt={props.alt || ''} />
                     )
                   }}

@@ -11,6 +11,7 @@ import StreakTracker from '../components/StreakTracker'
 import { useUpdateStreak } from '../hooks/useStreakUpdate'
 import { useMobileOptimization } from '../hooks/useMobileOptimization'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface ReviewCard extends Card {
   next_review: string
@@ -25,6 +26,7 @@ export default function Review() {
   const [searchParams] = useSearchParams()
   const isActiveMode = searchParams.get('mode') === 'active' // 主动复习：不限制到期，可选随机或自选
   const updateStreakMutation = useUpdateStreak()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(true)
   const [cards, setCards] = useState<ReviewCard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -55,14 +57,6 @@ export default function Review() {
       key: '1',
       action: () => showAnswer && handleRating(1),
       description: 'Rate: Forgot'
-    },
-    {
-      key: '2',
-      action: () => showAnswer && handleRating(2), // We don't have a button for 2, mapping to Hard? No, 2 is "Hard" in SM-2 but we only have 1, 3, 4, 5 buttons.
-      // Wait, the UI has: 1 (Forget), 3 (Hard), 4 (Good), 5 (Easy).
-      // Let's map 1->1, 2->3, 3->4, 4->5 for easier typing? Or 1, 3, 4, 5 directly?
-      // Let's map 1, 3, 4, 5 directly to avoid confusion.
-      description: 'Rate: Hard (mapped to 2 for convenience)'
     },
     {
       key: '3',
@@ -206,22 +200,18 @@ export default function Review() {
           review_count: nextSchedule.review_count
         })
         .eq('id', currentCard.id)
+        .eq('user_id', user.id)
 
       if (error) throw error
 
-      // Update stats
-      // setSessionStats(prev => ({
-      //   reviewed: prev.reviewed + 1,
-      //   correct: rating >= 3 ? prev.correct + 1 : prev.correct
-      // }))
-
       // Update streak
       const timeSpent = Math.round((Date.now() - startTime) / 1000)
-      updateStreakMutation.mutate({
+      await updateStreakMutation.mutateAsync({
         cardId: currentCard.id,
         rating,
         timeSpent
       })
+      queryClient.invalidateQueries({ queryKey: ['cards'] })
 
       // Move to next card
       if (currentIndex < cards.length - 1) {

@@ -38,7 +38,7 @@ export default function SharedCard() {
 
         if (error) throw error
         setCard(data as CardWithDetails)
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error fetching shared card:', err)
         setError('无法加载卡片')
       } finally {
@@ -89,7 +89,7 @@ export default function SharedCard() {
                   {card.categories.name}
                 </span>
               )}
-              {card.card_tags.map(({ tags }) => (
+              {(card.card_tags || []).map(({ tags }) => (
                 tags && (
                   <span key={tags.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                     <TagIcon className="w-3 h-3" />
@@ -125,10 +125,10 @@ export default function SharedCard() {
           <div className="p-6 md:p-10 prose prose-lg prose-blue dark:prose-invert max-w-none">
             <ReactMarkdown
               components={{
-                img: ({node, ...props}) => (
+                img: ({ ...props }) => (
                   <img {...props} className="rounded-xl shadow-lg my-8 max-h-[600px] object-contain mx-auto" alt={props.alt || ''} />
                 ),
-                a: ({node, ...props}) => (
+                a: ({ ...props }) => (
                   <a {...props} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors" target="_blank" rel="noopener noreferrer" />
                 )
               }}

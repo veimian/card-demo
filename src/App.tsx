@@ -11,6 +11,15 @@ import SharedCard from './pages/SharedCard'
 import Review from './pages/Review'
 import Dashboard from './pages/Dashboard'
 
+function NotFound() {
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">页面不存在</h1>
+      <p className="text-gray-500 dark:text-gray-400">请检查地址，或返回首页继续使用。</p>
+    </div>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -28,6 +37,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/card/new" element={<CardEditor />} />
             <Route path="/card/:id" element={<CardEditor />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Route>
       </Routes>

@@ -27,8 +27,8 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     self.postMessage({ status: 'complete', text });
-  } catch (error: any) {
-    self.postMessage({ status: 'error', error: error.message });
+  } catch (error) {
+    self.postMessage({ status: 'error', error: error instanceof Error ? error.message : '未知错误' });
   }
 };
 
@@ -40,7 +40,7 @@ async function extractPdfText(file: File): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item: any) => item.str).join(' ');
+    const pageText = textContent.items.map((item) => ('str' in item ? item.str : '')).join(' ');
     fullText += pageText + '\n';
     
     // Report progress
